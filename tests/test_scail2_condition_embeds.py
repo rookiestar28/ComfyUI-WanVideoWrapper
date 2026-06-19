@@ -153,14 +153,8 @@ def payload(*, include_additional: bool = True):
             "height": 8,
             "num_frames": 5,
         },
-        "segment": {
-            "segment_len": 81,
-            "segment_overlap": 5,
-        },
         "source": {
             "source_kind": "unit_test",
-            "previous_frame_count": 0,
-            "video_frame_offset": 0,
         },
         "runtime_masks": {
             "reference": runtime_mask(1),
@@ -217,6 +211,8 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertEqual([(16, 1, 1, 1)], [x.shape for x in scail2["additional_ref_latents"]])
         self.assertEqual([(28, 1, 1, 1)], [x.shape for x in scail2["additional_ref_masks"]])
         self.assertIs(scail2["clip_context"], clip_embeds["clip_embeds"])
+        self.assertIsNone(scail2["segment"])
+        self.assertEqual({"source_kind": "unit_test"}, scail2["source"])
         self.assertEqual((3, 1, 8, 8), vae.encode_calls[0]["shape"])
         self.assertEqual((3, 5, 4, 4), vae.encode_calls[1]["shape"])
 

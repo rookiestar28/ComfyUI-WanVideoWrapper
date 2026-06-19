@@ -247,7 +247,7 @@ class WanVideoAddSCAIL2ConditionEmbeds:
             "mode": payload["mode"],
             "replace_flag": payload["replace_flag"],
             "dimensions": payload["dimensions"],
-            "segment": payload["segment"],
+            "segment": payload.get("segment"),
             "source": payload["source"],
             "ref_latents": [ref_latent],
             "ref_masks": [

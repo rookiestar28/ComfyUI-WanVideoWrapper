@@ -20,6 +20,27 @@ def import_routing_module():
     return module
 
 
+class FakeTemporalTensor:
+    def __init__(self, shape, name="tensor"):
+        self.shape = tuple(shape)
+        self.name = name
+
+    def __getitem__(self, key):
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise TypeError(f"unsupported fake tensor index: {key!r}")
+        channel_index, frame_index = key
+        if channel_index != slice(None):
+            raise TypeError(f"unsupported fake tensor channel index: {key!r}")
+        if isinstance(frame_index, slice):
+            frame_count = len(range(*frame_index.indices(self.shape[1])))
+        else:
+            frame_count = len(frame_index)
+        return FakeTemporalTensor(
+            (self.shape[0], frame_count, *self.shape[2:]),
+            name=f"{self.name}_sliced",
+        )
+
+
 class SCAIL2RoutingTests(unittest.TestCase):
     def test_prepare_returns_none_without_scail2_embeds(self) -> None:
         module = import_routing_module()
@@ -80,13 +101,67 @@ class SCAIL2RoutingTests(unittest.TestCase):
                 dtype="float16",
             )
 
-    def test_context_windows_are_rejected_for_scail2_native(self) -> None:
+    def test_context_window_none_preserves_scail2_native_payload(self) -> None:
         module = import_routing_module()
         scail2_data = {"pose_latents": object()}
 
         self.assertIs(scail2_data, module.scail2_context_window_input(scail2_data, None))
-        with self.assertRaisesRegex(ValueError, "context windows"):
-            module.scail2_context_window_input(scail2_data, slice(0, 2))
+
+    def test_context_window_slices_temporal_controls_only(self) -> None:
+        module = import_routing_module()
+        ref_latents = [FakeTemporalTensor((16, 1, 2, 2), name="ref_latents")]
+        ref_masks = [FakeTemporalTensor((28, 1, 2, 2), name="ref_masks")]
+        additional_ref_latents = [
+            FakeTemporalTensor((16, 1, 2, 2), name="additional_ref_latents")
+        ]
+        additional_ref_masks = [
+            FakeTemporalTensor((28, 1, 2, 2), name="additional_ref_masks")
+        ]
+        pose_latents = [FakeTemporalTensor((16, 5, 2, 2), name="pose_latents")]
+        driving_masks = [FakeTemporalTensor((28, 5, 2, 2), name="driving_masks")]
+        scail2_data = {
+            "schema": {"version": 1},
+            "ref_latents": ref_latents,
+            "ref_masks": ref_masks,
+            "additional_ref_latents": additional_ref_latents,
+            "additional_ref_masks": additional_ref_masks,
+            "pose_latents": pose_latents,
+            "driving_masks": driving_masks,
+        }
+
+        result = module.scail2_context_window_input(scail2_data, [0, 2, 4])
+
+        self.assertIsNot(result, scail2_data)
+        self.assertIs(result["schema"], scail2_data["schema"])
+        self.assertIs(result["ref_latents"], ref_latents)
+        self.assertIs(result["ref_masks"], ref_masks)
+        self.assertIs(result["additional_ref_latents"], additional_ref_latents)
+        self.assertIs(result["additional_ref_masks"], additional_ref_masks)
+        self.assertIs(scail2_data["pose_latents"], pose_latents)
+        self.assertIs(scail2_data["driving_masks"], driving_masks)
+        self.assertEqual((16, 3, 2, 2), result["pose_latents"][0].shape)
+        self.assertEqual((28, 3, 2, 2), result["driving_masks"][0].shape)
+        self.assertEqual((16, 5, 2, 2), scail2_data["pose_latents"][0].shape)
+        self.assertEqual((28, 5, 2, 2), scail2_data["driving_masks"][0].shape)
+
+    def test_context_window_accepts_slice_objects(self) -> None:
+        module = import_routing_module()
+        scail2_data = {
+            "pose_latents": [FakeTemporalTensor((16, 5, 2, 2))],
+            "driving_masks": [FakeTemporalTensor((28, 5, 2, 2))],
+        }
+
+        result = module.scail2_context_window_input(scail2_data, slice(1, 5, 2))
+
+        self.assertEqual((16, 2, 2, 2), result["pose_latents"][0].shape)
+        self.assertEqual((28, 2, 2, 2), result["driving_masks"][0].shape)
+
+    def test_context_window_rejects_scalar_window(self) -> None:
+        module = import_routing_module()
+        scail2_data = {"pose_latents": [FakeTemporalTensor((16, 5, 2, 2))]}
+
+        with self.assertRaisesRegex(TypeError, "sequence of frame indices"):
+            module.scail2_context_window_input(scail2_data, 0)
 
     def test_model_params_receive_scail2_input_only_when_present(self) -> None:
         module = import_routing_module()

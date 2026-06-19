@@ -39,14 +39,84 @@ def scail2_context_window_input(
     if scail2_data is None:
         return None
 
-    # SCAIL-2 mask/reference token alignment must be sliced deliberately; the
-    # v1 pose-only shortcut is not safe for the native v2 payload.
-    if context_window is not None:
-        raise ValueError(
-            "SCAIL-2 native scail2_embeds do not support wrapper context windows yet"
-        )
+    if context_window is None:
+        return scail2_data
 
-    return scail2_data
+    sliced = scail2_data.copy()
+    sliced["pose_latents"] = _slice_temporal_field(
+        scail2_data.get("pose_latents"),
+        context_window,
+        field_name="pose_latents",
+    )
+    sliced["driving_masks"] = _slice_temporal_field(
+        scail2_data.get("driving_masks"),
+        context_window,
+        field_name="driving_masks",
+    )
+    return sliced
+
+
+def _slice_temporal_field(
+    value: Any,
+    context_window: Any,
+    *,
+    field_name: str,
+) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [
+            _slice_temporal_tensor(item, context_window, field_name=field_name)
+            for item in value
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            _slice_temporal_tensor(item, context_window, field_name=field_name)
+            for item in value
+        )
+    return _slice_temporal_tensor(value, context_window, field_name=field_name)
+
+
+def _slice_temporal_tensor(tensor: Any, context_window: Any, *, field_name: str) -> Any:
+    shape = getattr(tensor, "shape", None)
+    if shape is None or len(shape) < 2:
+        raise ValueError(f"SCAIL-2 {field_name} tensors must expose CTHW-like shape")
+
+    expected_frames = _context_window_length(context_window, int(shape[1]))
+    try:
+        sliced = tensor[:, context_window]
+    except Exception as exc:
+        raise TypeError(
+            f"SCAIL-2 {field_name} cannot be sliced by wrapper context_window"
+        ) from exc
+
+    sliced_shape = getattr(sliced, "shape", None)
+    if sliced_shape is None or len(sliced_shape) < 2:
+        raise ValueError(
+            f"SCAIL-2 {field_name} context slicing must preserve time dimension"
+        )
+    if int(sliced_shape[1]) != expected_frames:
+        raise ValueError(
+            f"SCAIL-2 {field_name} context slice has {sliced_shape[1]} frames, "
+            f"expected {expected_frames}"
+        )
+    return sliced
+
+
+def _context_window_length(context_window: Any, frame_count: int) -> int:
+    if isinstance(context_window, slice):
+        return len(range(*context_window.indices(frame_count)))
+    if isinstance(context_window, (str, bytes)):
+        raise TypeError("SCAIL-2 context_window must be a sequence of frame indices")
+    try:
+        length = len(context_window)
+    except TypeError as exc:
+        raise TypeError(
+            "SCAIL-2 context_window must be a sequence of frame indices"
+        ) from exc
+    if length <= 0:
+        raise ValueError("SCAIL-2 context_window must contain at least one frame")
+    return int(length)
 
 
 def add_scail2_model_param(
