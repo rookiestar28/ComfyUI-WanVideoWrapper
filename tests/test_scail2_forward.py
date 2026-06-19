@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -25,6 +27,44 @@ class FakeTensor:
         self.shape = tuple(shape)
 
 
+class FakePatchEmbedding:
+    def __init__(self, in_channels):
+        self.weight = FakeTensor((8, in_channels, 1, 2, 2))
+
+
+class FakeLatent:
+    def __init__(self, shape, *, fill=1.0, parts=()):
+        self.shape = tuple(shape)
+        self.fill = fill
+        self.parts = tuple(parts)
+
+    def new_zeros(self, shape):
+        return FakeLatent(shape, fill=0.0)
+
+
+class FakeTorchModule:
+    @staticmethod
+    def cat(items, dim=0):
+        items = tuple(items)
+        shape = list(items[0].shape)
+        shape[dim] = sum(item.shape[dim] for item in items)
+        return FakeLatent(tuple(shape), parts=items)
+
+
+@contextmanager
+def fake_torch_module():
+    sentinel = object()
+    previous = sys.modules.get("torch", sentinel)
+    sys.modules["torch"] = FakeTorchModule()
+    try:
+        yield
+    finally:
+        if previous is sentinel:
+            sys.modules.pop("torch", None)
+        else:
+            sys.modules["torch"] = previous
+
+
 def plan(scail2_input, video_shape=(16, 2, 4, 4)):
     module = import_forward_module()
     return module.build_scail2_forward_plan(
@@ -35,6 +75,46 @@ def plan(scail2_input, video_shape=(16, 2, 4, 4)):
 
 
 class SCAIL2ForwardPlanTests(unittest.TestCase):
+    def test_history_channels_are_appended_for_twenty_channel_patch_embedding(self) -> None:
+        module = import_forward_module()
+        embedding = FakePatchEmbedding(20)
+        latent = FakeLatent((16, 2, 4, 4))
+
+        with fake_torch_module():
+            expanded = module.append_scail2_history_channels(
+                latent,
+                patch_embedding=embedding,
+            )
+
+        self.assertEqual((20, 2, 4, 4), tuple(expanded.shape))
+        self.assertIs(latent, expanded.parts[0])
+        self.assertEqual((4, 2, 4, 4), expanded.parts[1].shape)
+        self.assertEqual(0.0, expanded.parts[1].fill)
+
+    def test_history_channels_are_noop_when_channels_already_match(self) -> None:
+        module = import_forward_module()
+        embedding = FakePatchEmbedding(20)
+        latent = FakeLatent((20, 2, 4, 4))
+
+        self.assertIs(
+            latent,
+            module.append_scail2_history_channels(
+                latent,
+                patch_embedding=embedding,
+            ),
+        )
+
+    def test_history_channels_reject_unexpected_channel_gap(self) -> None:
+        module = import_forward_module()
+        embedding = FakePatchEmbedding(20)
+        latent = FakeLatent((15, 2, 4, 4))
+
+        with self.assertRaisesRegex(ValueError, "expects 20, got 15"):
+            module.append_scail2_history_channels(
+                latent,
+                patch_embedding=embedding,
+            )
+
     def test_mask_only_control_is_not_dropped(self) -> None:
         result = plan(
             {
@@ -147,6 +227,7 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIn("# SCAIL pose", model_source)
         self.assertIn("if scail_input is not None:", model_source)
         self.assertIn("if scail2_input is not None:", model_source)
+        self.assertIn("append_scail2_history_channels", model_source)
 
 
 if __name__ == "__main__":

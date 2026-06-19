@@ -5,6 +5,7 @@ from typing import Any
 
 REF_SPATIAL_SHIFT = 120.0
 POSE_SPATIAL_SHIFT = 120.0
+SCAIL2_HISTORY_CHANNELS = 4
 
 
 def as_scail2_list(value: Any) -> list[Any]:
@@ -20,6 +21,55 @@ def shape_of(value: Any, *, name: str) -> tuple[int, ...]:
     if shape is None:
         raise ValueError(f"{name} must expose a shape")
     return tuple(int(part) for part in shape)
+
+
+def patch_embedding_input_channels(patch_embedding: Any) -> int | None:
+    weight = getattr(patch_embedding, "weight", None)
+    shape = getattr(weight, "shape", None)
+    if shape is None or len(tuple(shape)) < 2:
+        return None
+    return int(shape[1])
+
+
+def scail2_history_channels_needed(
+    *,
+    latent_channels: int,
+    patch_channels: int | None,
+) -> int:
+    if patch_channels is None or patch_channels == latent_channels:
+        return 0
+    if patch_channels - latent_channels == SCAIL2_HISTORY_CHANNELS:
+        return SCAIL2_HISTORY_CHANNELS
+    raise ValueError(
+        "SCAIL-2 main latent channel mismatch: "
+        f"patch embedding expects {patch_channels}, got {latent_channels}"
+    )
+
+
+def append_scail2_history_channels(
+    latent: Any,
+    *,
+    patch_embedding: Any,
+    name: str = "SCAIL-2 main latent",
+) -> Any:
+    latent_shape = shape_of(latent, name=name)
+    if len(latent_shape) != 4:
+        raise ValueError(f"{name} must be CTHW, got {latent_shape}")
+    needed = scail2_history_channels_needed(
+        latent_channels=latent_shape[0],
+        patch_channels=patch_embedding_input_channels(patch_embedding),
+    )
+    if needed == 0:
+        return latent
+
+    # Official ComfyUI SCAIL-2 supplies these 4 history-mask channels before
+    # the 20-channel patch embedding; zero is the official fallback without a mask.
+    try:
+        import torch
+    except ModuleNotFoundError as exc:  # pragma: no cover - runtime requires torch
+        raise RuntimeError("torch is required to append SCAIL-2 history channels") from exc
+    history = latent.new_zeros((needed, *latent_shape[1:]))
+    return torch.cat([latent, history], dim=0)
 
 
 def latent_frames(items: list[Any], *, name: str) -> int:

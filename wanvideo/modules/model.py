@@ -23,7 +23,11 @@ from ...cache_methods.cache_methods import TeaCacheState, MagCacheState, EasyCac
 from ...multitalk.multitalk import get_attn_map_with_target
 from ...echoshot.echoshot import rope_apply_z, rope_apply_c, rope_apply_echoshot
 from ...custom_linear import update_lora_step
-from ...SCAIL.scail2_forward import as_scail2_list, build_scail2_forward_plan
+from ...SCAIL.scail2_forward import (
+    append_scail2_history_channels,
+    as_scail2_list,
+    build_scail2_forward_plan,
+)
 
 from ...MTV.mtv import apply_rotary_emb
 from comfy.ldm.flux.math import apply_rope1 as apply_rope_comfy1
@@ -2676,10 +2680,21 @@ class WanModel(torch.nn.Module):
             # patch embed
             if control_lora_enabled:
                 self.expanded_patch_embedding.to(self.main_device)
-                x = [self.expanded_patch_embedding(u.unsqueeze(0).to(torch.float32)).to(x[0].dtype) for u in x]
+                patch_embedding = self.expanded_patch_embedding
             else:
                 self.original_patch_embedding.to(self.main_device)
-                x = [self.original_patch_embedding(u.unsqueeze(0).to(torch.float32)).to(x[0].dtype) for u in x]
+                patch_embedding = self.original_patch_embedding
+            input_dtype = x[0].dtype
+            if scail2_input is not None:
+                x = [
+                    append_scail2_history_channels(
+                        u,
+                        patch_embedding=patch_embedding,
+                        name="SCAIL-2 main latent",
+                    )
+                    for u in x
+                ]
+            x = [patch_embedding(u.unsqueeze(0).to(torch.float32)).to(input_dtype) for u in x]
 
         if scail2_ref_video_mask is not None:
             scail2_ref_video_mask_emb = self.patch_embedding_mask(
