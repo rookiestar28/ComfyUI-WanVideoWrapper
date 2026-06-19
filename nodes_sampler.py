@@ -13,6 +13,11 @@ from .utils import(log, print_memory, apply_lora, fourier_filter, optimized_scal
 from .multitalk.multitalk_loop import multitalk_loop
 from .cache_methods.cache_methods import cache_report
 from .nodes_model_loading import load_weights
+from .SCAIL.scail2_routing import (
+    add_scail2_model_param,
+    prepare_scail2_data,
+    scail2_context_window_input,
+)
 from .enhance_a_video.globals import set_enhance_weight, set_num_frames
 from .WanMove.trajectory import replace_feature
 from contextlib import nullcontext
@@ -1144,6 +1149,14 @@ class WanVideoSampler:
             scail_data = scail_embeds.copy()
             scail_data = dict_to_device(scail_data, device, dtype)
 
+        scail2_data = prepare_scail2_data(
+            image_embeds,
+            dict_to_device=dict_to_device,
+            device=device,
+            dtype=dtype,
+        )
+        if scail2_data is not None:
+            log.info("Using SCAIL-2 native embeddings")
 
         # WanMove
         wanmove_embeds = None
@@ -1417,6 +1430,8 @@ class WanVideoSampler:
                     else:
                         scail_data_in = scail_data
 
+                scail2_data_in = scail2_context_window_input(scail2_data, context_window)
+
                 if wanmove_embeds is not None and context_window is not None:
                     image_cond_input = replace_feature(image_cond_input.unsqueeze(0), track_pos[:, context_window].unsqueeze(0), wanmove_embeds.get("strength", 1.0))[0]
 
@@ -1500,6 +1515,7 @@ class WanVideoSampler:
                     "rope_negative_offset": image_embeds.get("rope_negative_offset_frames", 0), # StoryMem rope negative offset
                     "num_memory_frames": story_mem_latents.shape[1] if story_mem_latents is not None else 0, # StoryMem memory frames
                 }
+                base_params = add_scail2_model_param(base_params, scail2_data_in)
 
                 batch_size = 1
 
