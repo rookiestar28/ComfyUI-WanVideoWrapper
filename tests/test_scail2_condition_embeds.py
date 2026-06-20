@@ -71,9 +71,39 @@ def install_comfy_stub() -> None:
     sys.modules["comfy.model_management"] = model_management
 
 
+def install_comfy_stub_with_real_torch() -> None:
+    comfy = types.ModuleType("comfy")
+    comfy.__path__ = []
+    model_management = types.ModuleType("comfy.model_management")
+    model_management.get_torch_device = lambda: "cpu"
+    model_management.unet_offload_device = lambda: "cpu"
+    sys.modules["comfy"] = comfy
+    sys.modules["comfy.model_management"] = model_management
+
+
 def import_scail_nodes():
     install_comfy_stub()
     module_name = "wan_scail_nodes_under_test"
+    sys.modules.pop(module_name, None)
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        ROOT / "SCAIL" / "nodes.py",
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def import_scail_nodes_with_real_torch():
+    for name in ("torch", "torch.nn", "torch.nn.functional"):
+        sys.modules.pop(name, None)
+    import torch  # noqa: F401
+
+    install_comfy_stub_with_real_torch()
+    module_name = "wan_scail_nodes_real_torch_under_test"
     sys.modules.pop(module_name, None)
     spec = importlib.util.spec_from_file_location(
         module_name,
@@ -113,6 +143,29 @@ class FakeVAE:
         return [FakeTensor((16, frames, latent_h, latent_w))]
 
 
+class RecordingVAE(FakeVAE):
+    def __init__(self) -> None:
+        super().__init__()
+        import torch
+
+        self.dtype = torch.float32
+
+    def encode(self, images, device, tiled=False):
+        image = images[0]
+        self.encode_calls.append(
+            {
+                "shape": tuple(image.shape),
+                "device": str(device),
+                "tiled": tiled,
+                "image": image.detach().cpu().clone(),
+            }
+        )
+        _channels, frames, height, width = image.shape
+        latent_h = max(height // 8, 1)
+        latent_w = max(width // 8, 1)
+        return [FakeTensor((16, frames, latent_h, latent_w))]
+
+
 def image_batch(frames: int, height: int = 8, width: int = 8):
     return FakeTensor((frames, height, width, 3))
 
@@ -126,12 +179,19 @@ def runtime_mask(latent_frames: int):
     }
 
 
-def payload(*, include_additional: bool = True):
-    additional_ref = {"image": image_batch(1)}
+def payload(
+    *,
+    include_additional: bool = True,
+    ref_height: int = 8,
+    ref_width: int = 8,
+    additional_height: int = 8,
+    additional_width: int = 8,
+):
+    additional_ref = {"image": image_batch(1, additional_height, additional_width)}
     additional_refs = [additional_ref] if include_additional else []
     additional_masks = [runtime_mask(1)] if include_additional else []
     condition = {
-        "ref_image": image_batch(1),
+        "ref_image": image_batch(1, ref_height, ref_width),
         "pose_video": image_batch(5),
         "additional_references": additional_refs,
     }
@@ -162,6 +222,64 @@ def payload(*, include_additional: bool = True):
             "additional_references": additional_masks,
         },
         "additional_references": additional_refs,
+    }
+
+
+def real_runtime_mask(latent_frames: int):
+    import torch
+
+    data = torch.zeros((1, latent_frames, 28, 1, 1), dtype=torch.float32)
+    return {
+        "data": data,
+        "comfy_shape": tuple(data.shape),
+        "scail2_shape": (28, latent_frames, 1, 1),
+    }
+
+
+def real_replacement_payload():
+    import torch
+
+    ref_mask_indices = torch.full((1, 8, 8), -1, dtype=torch.int8)
+    ref_mask_indices[:, :, :4] = 3
+    add_mask_indices = torch.full((1, 8, 8), -1, dtype=torch.int8)
+    add_mask_indices[:, :4, :] = 3
+    additional_ref = {
+        "image": torch.ones((1, 8, 8, 3), dtype=torch.float32),
+        "mask_indices": add_mask_indices,
+    }
+    condition = {
+        "ref_image": torch.ones((1, 8, 8, 3), dtype=torch.float32),
+        "ref_mask_indices": ref_mask_indices,
+        "pose_video": torch.ones((5, 8, 8, 3), dtype=torch.float32),
+        "additional_references": [additional_ref],
+    }
+    return {
+        "kind": "wanvideo_scail2_condition_adapter",
+        "version": 1,
+        "schema": {
+            "name": "scail_pose2.wanvideo_scail2_payload",
+            "version": 1,
+            "native_wrapper": {
+                "embeds_key": "scail2_embeds",
+            },
+        },
+        "condition": condition,
+        "mode": "replacement",
+        "replace_flag": True,
+        "dimensions": {
+            "width": 8,
+            "height": 8,
+            "num_frames": 5,
+        },
+        "source": {
+            "source_kind": "unit_test",
+        },
+        "runtime_masks": {
+            "reference": real_runtime_mask(1),
+            "driving": real_runtime_mask(2),
+            "additional_references": [real_runtime_mask(1)],
+        },
+        "additional_references": [additional_ref],
     }
 
 
@@ -215,6 +333,46 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertEqual({"source_kind": "unit_test"}, scail2["source"])
         self.assertEqual((3, 1, 8, 8), vae.encode_calls[0]["shape"])
         self.assertEqual((3, 5, 4, 4), vae.encode_calls[1]["shape"])
+
+    def test_references_are_resized_to_payload_dimensions_before_encode(self) -> None:
+        module = import_scail_nodes()
+        vae = FakeVAE()
+        embeds = {
+            "target_shape": (16, 2, 1, 1),
+            "num_frames": 5,
+        }
+
+        module.WanVideoAddSCAIL2ConditionEmbeds().add(
+            embeds,
+            payload(ref_height=16, ref_width=12, additional_height=10, additional_width=14),
+            vae,
+        )
+
+        self.assertEqual((3, 1, 8, 8), vae.encode_calls[0]["shape"])
+        self.assertEqual((3, 5, 4, 4), vae.encode_calls[1]["shape"])
+        self.assertEqual((3, 1, 8, 8), vae.encode_calls[2]["shape"])
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
+    def test_replacement_mode_composites_reference_images_before_encode(self) -> None:
+        module = import_scail_nodes_with_real_torch()
+        vae = RecordingVAE()
+        embeds = {
+            "target_shape": (16, 2, 1, 1),
+            "num_frames": 5,
+        }
+
+        module.WanVideoAddSCAIL2ConditionEmbeds().add(
+            embeds,
+            real_replacement_payload(),
+            vae,
+        )
+
+        primary_ref = vae.encode_calls[0]["image"]
+        additional_ref = vae.encode_calls[2]["image"]
+        self.assertEqual(1.0, float(primary_ref[0, 0, 0, 0].item()))
+        self.assertEqual(-1.0, float(primary_ref[0, 0, 0, 7].item()))
+        self.assertEqual(1.0, float(additional_ref[0, 0, 0, 0].item()))
+        self.assertEqual(-1.0, float(additional_ref[0, 0, 7, 0].item()))
 
     def test_rejects_invalid_payload(self) -> None:
         module = import_scail_nodes()

@@ -13,6 +13,7 @@ SCAIL2_PAYLOAD_SCHEMA_NAME = "scail_pose2.wanvideo_scail2_payload"
 SCAIL2_PAYLOAD_VERSION = 1
 SCAIL2_EMBEDS_KEY = "scail2_embeds"
 SCAIL_V1_EMBEDS_KEY = "scail_embeds"
+BACKGROUND_INDEX = -1
 
 
 def _field(value, name, default=None):
@@ -72,6 +73,52 @@ def _resize_cthw_spatial(image_cthw, height, width):
     return resized.permute(1, 0, 2, 3)
 
 
+def _resize_bhwc_spatial(image, height, width):
+    image = image[..., :3]
+    if int(image.shape[1]) == int(height) and int(image.shape[2]) == int(width):
+        return image
+    frames = image.permute(0, 3, 1, 2)
+    resized = F.interpolate(frames, size=(int(height), int(width)), mode="bilinear", align_corners=False)
+    return resized.permute(0, 2, 3, 1).contiguous()
+
+
+def _mask_indices_to_reference_alpha(mask_indices, *, height, width, name):
+    if mask_indices is None:
+        return None
+    if hasattr(mask_indices, "detach"):
+        indices = mask_indices.detach().to(device)
+    else:
+        indices = torch.as_tensor(mask_indices, device=device)
+    if indices.ndim == 2:
+        indices = indices.unsqueeze(0)
+    if indices.ndim != 3:
+        raise ValueError(f"{name} mask indices must have shape [frames, height, width]")
+    if int(indices.shape[0]) <= 0 or int(indices.shape[1]) <= 0 or int(indices.shape[2]) <= 0:
+        raise ValueError(f"{name} mask indices must be non-empty")
+    alpha = (indices[:1] != BACKGROUND_INDEX).to(dtype=torch.float32).unsqueeze(1)
+    if int(alpha.shape[-2]) != int(height) or int(alpha.shape[-1]) != int(width):
+        alpha = F.interpolate(alpha, size=(int(height), int(width)), mode="nearest")
+    return alpha.permute(0, 2, 3, 1).contiguous()
+
+
+def _prepare_reference_image(image, mask_indices, *, replace_flag, height, width, name):
+    if image is None:
+        raise ValueError(f"{name} is required for SCAIL-2 condition embeds")
+    resized = _resize_bhwc_spatial(image, height, width)
+    if replace_flag and mask_indices is not None:
+        alpha = _mask_indices_to_reference_alpha(
+            mask_indices,
+            height=height,
+            width=width,
+            name=name,
+        )
+        alpha = alpha.to(resized.device, resized.dtype)
+        if int(alpha.shape[0]) != int(resized.shape[0]):
+            alpha = alpha[:1].expand(int(resized.shape[0]), -1, -1, -1)
+        resized = resized * alpha
+    return resized
+
+
 def _encode_image_batch(vae, image, *, name, spatial_size=None):
     if image is None:
         raise ValueError(f"{name} is required for SCAIL-2 condition embeds")
@@ -100,6 +147,10 @@ def _additional_ref_image(additional_ref):
     if image is None:
         raise ValueError("additional reference is missing image")
     return image
+
+
+def _additional_ref_mask_indices(additional_ref):
+    return _field(additional_ref, "mask_indices")
 
 class WanVideoAddSCAILReferenceEmbeds:
     @classmethod
@@ -213,11 +264,20 @@ class WanVideoAddSCAIL2ConditionEmbeds:
         dimensions = payload["dimensions"]
         width = int(dimensions["width"])
         height = int(dimensions["height"])
+        replace_flag = bool(payload["replace_flag"])
 
         vae.to(device)
+        ref_image = _prepare_reference_image(
+            _field(source_condition, "ref_image"),
+            _field(source_condition, "ref_mask_indices"),
+            replace_flag=replace_flag,
+            height=height,
+            width=width,
+            name="reference",
+        )
         ref_latent = _encode_image_batch(
             vae,
-            _field(source_condition, "ref_image"),
+            ref_image,
             name="reference",
         )
         pose_latent = _encode_image_batch(
@@ -228,10 +288,18 @@ class WanVideoAddSCAIL2ConditionEmbeds:
         )
         additional_ref_latents = []
         for index, additional_ref in enumerate(payload.get("additional_references") or ()):
+            additional_ref_image = _prepare_reference_image(
+                _additional_ref_image(additional_ref),
+                _additional_ref_mask_indices(additional_ref),
+                replace_flag=replace_flag,
+                height=height,
+                width=width,
+                name=f"additional_reference_{index}",
+            )
             additional_ref_latents.append(
                 _encode_image_batch(
                     vae,
-                    _additional_ref_image(additional_ref),
+                    additional_ref_image,
                     name=f"additional_reference_{index}",
                 )
             )
