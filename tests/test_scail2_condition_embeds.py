@@ -329,6 +329,7 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertEqual([(16, 1, 1, 1)], [x.shape for x in scail2["additional_ref_latents"]])
         self.assertEqual([(28, 1, 1, 1)], [x.shape for x in scail2["additional_ref_masks"]])
         self.assertIs(scail2["clip_context"], clip_embeds["clip_embeds"])
+        self.assertIs(result["clip_context"], clip_embeds["clip_embeds"])
         self.assertIsNone(scail2["segment"])
         self.assertEqual({"source_kind": "unit_test"}, scail2["source"])
         self.assertEqual((3, 1, 8, 8), vae.encode_calls[0]["shape"])

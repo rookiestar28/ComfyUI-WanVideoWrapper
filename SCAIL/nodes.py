@@ -265,6 +265,7 @@ class WanVideoAddSCAIL2ConditionEmbeds:
         width = int(dimensions["width"])
         height = int(dimensions["height"])
         replace_flag = bool(payload["replace_flag"])
+        clip_context = clip_embeds.get("clip_embeds", None) if clip_embeds is not None else None
 
         vae.to(device)
         ref_image = _prepare_reference_image(
@@ -327,8 +328,12 @@ class WanVideoAddSCAIL2ConditionEmbeds:
             ],
             "additional_ref_latents": additional_ref_latents or None,
             "additional_ref_masks": additional_ref_masks or None,
-            "clip_context": clip_embeds.get("clip_embeds", None) if clip_embeds is not None else None,
+            "clip_context": clip_context,
         }
+        if clip_context is not None:
+            # IMPORTANT: WanVideoSampler reads CLIP image conditioning from the
+            # top-level image_embeds key, not from the nested SCAIL-2 payload.
+            updated["clip_context"] = clip_context
         updated[SCAIL2_EMBEDS_KEY] = scail2_embeds
         return (updated,)
 
