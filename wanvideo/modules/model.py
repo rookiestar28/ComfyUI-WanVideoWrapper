@@ -2778,6 +2778,11 @@ class WanModel(torch.nn.Module):
             if scail2_pose_latents is not None:
                 if not hasattr(self, "patch_embedding_pose"):
                     raise ValueError("SCAIL-2 scail2_input requires patch_embedding_pose to consume pose_latents")
+                scail2_pose_latents = append_scail2_history_channels(
+                    scail2_pose_latents,
+                    patch_embedding=self.patch_embedding_pose,
+                    name="SCAIL-2 pose latent",
+                )
                 scail2_x = self.patch_embedding_pose(scail2_pose_latents.unsqueeze(0).to(torch.float32)).to(x[0].dtype)
             if scail2_driving_masks is not None:
                 if not hasattr(self, "patch_embedding_mask"):

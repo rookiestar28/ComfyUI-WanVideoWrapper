@@ -229,6 +229,13 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIn("if scail2_input is not None:", model_source)
         self.assertIn("append_scail2_history_channels", model_source)
 
+    def test_model_pads_scail2_pose_latents_before_pose_patch_embedding(self) -> None:
+        model_source = (ROOT / "wanvideo" / "modules" / "model.py").read_text(encoding="utf-8")
+
+        self.assertIn("append_scail2_history_channels(\n                    scail2_pose_latents", model_source)
+        self.assertIn("patch_embedding=self.patch_embedding_pose", model_source)
+        self.assertIn('name="SCAIL-2 pose latent"', model_source)
+
 
 if __name__ == "__main__":
     unittest.main()
