@@ -51,6 +51,9 @@ class FakeLatent:
     def __setitem__(self, key, value):
         self.writes = (*self.writes, (key, value))
 
+    def __mul__(self, value):
+        return FakeLatent(self.shape, fill=self.fill * float(value), parts=(self,))
+
 
 class FakeTorchModule:
     @staticmethod
@@ -262,6 +265,53 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "additional_ref_masks requires"):
             plan({"additional_ref_masks": [FakeTensor((28, 1, 4, 4))]})
 
+    def test_scail2_strengths_default_and_partial_override(self) -> None:
+        module = import_forward_module()
+
+        self.assertEqual(
+            {
+                "ref_image": 1.0,
+                "ref_mask": 1.0,
+                "condition_video": 1.0,
+                "driving_mask": 1.0,
+            },
+            module.scail2_strengths({}),
+        )
+        self.assertEqual(
+            {
+                "ref_image": 1.5,
+                "ref_mask": 1.0,
+                "condition_video": 0.25,
+                "driving_mask": 1.0,
+            },
+            module.scail2_strengths(
+                {"strengths": {"ref_image": 1.5, "condition_video": 0.25}}
+            ),
+        )
+
+    def test_scail2_strengths_validate_range_and_shape(self) -> None:
+        module = import_forward_module()
+
+        with self.assertRaisesRegex(ValueError, "must be a dict"):
+            module.scail2_strengths({"strengths": 1.0})
+        with self.assertRaisesRegex(ValueError, "ref_image"):
+            module.scail2_strengths({"strengths": {"ref_image": -0.01}})
+        with self.assertRaisesRegex(ValueError, "driving_mask"):
+            module.scail2_strengths({"strengths": {"driving_mask": 10.01}})
+        with self.assertRaisesRegex(ValueError, "ref_mask"):
+            module.scail2_strengths({"strengths": {"ref_mask": True}})
+
+    def test_scale_scail2_items_preserves_default_and_scales_non_default(self) -> None:
+        module = import_forward_module()
+        latent = FakeLatent((16, 1, 4, 4), fill=2.0)
+
+        self.assertIs(module.scale_scail2_items([latent], 1.0)[0], latent)
+
+        scaled = module.scale_scail2_items([latent], 1.5)[0]
+        self.assertIsNot(scaled, latent)
+        self.assertEqual(3.0, scaled.fill)
+        self.assertIs(scaled.parts[0], latent)
+
     def test_model_keeps_v1_and_v2_forward_branches_distinct(self) -> None:
         model_source = (ROOT / "wanvideo" / "modules" / "model.py").read_text(encoding="utf-8")
 
@@ -272,6 +322,8 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIn("if scail2_input is not None:", model_source)
         self.assertIn("append_scail2_history_channels", model_source)
         self.assertIn("mark_scail2_prefix_history_channels", model_source)
+        self.assertIn("scail2_strengths", model_source)
+        self.assertIn("scale_scail2_items", model_source)
 
     def test_model_pads_scail2_pose_latents_before_pose_patch_embedding(self) -> None:
         model_source = (ROOT / "wanvideo" / "modules" / "model.py").read_text(encoding="utf-8")
@@ -287,6 +339,15 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIn("mark_scail2_prefix_history_channels(", model_source)
         self.assertIn('prefix_frames=scail2_plan["prefix_frames"]', model_source)
         self.assertIn('name="SCAIL-2 main latent"', model_source)
+
+    def test_model_applies_scail2_strengths_to_native_groups(self) -> None:
+        model_source = (ROOT / "wanvideo" / "modules" / "model.py").read_text(encoding="utf-8")
+
+        self.assertIn("strengths = scail2_strengths(scail2_input)", model_source)
+        self.assertIn('scale_scail2_items(ref_latents, strengths["ref_image"])', model_source)
+        self.assertIn('strengths["ref_mask"]', model_source)
+        self.assertIn('strengths["condition_video"]', model_source)
+        self.assertIn('strengths["driving_mask"]', model_source)
 
 
 if __name__ == "__main__":

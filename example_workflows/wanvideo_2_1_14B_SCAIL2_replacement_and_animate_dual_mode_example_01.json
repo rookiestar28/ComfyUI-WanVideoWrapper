@@ -4209,7 +4209,7 @@
       ],
       "size": [
         350,
-        88.51716358664714
+        166
       ],
       "flags": {},
       "order": 71,
@@ -4251,7 +4251,12 @@
         "ver": "088128b224242e110d3906c6750e9a3a348a659b",
         "Node name for S&R": "WanVideoAddSCAIL2ConditionEmbeds"
       },
-      "widgets_values": []
+      "widgets_values": [
+        1,
+        1,
+        1,
+        1
+      ]
     },
     {
       "id": 447,

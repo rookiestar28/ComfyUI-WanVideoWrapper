@@ -6,6 +6,12 @@ from typing import Any
 REF_SPATIAL_SHIFT = 120.0
 POSE_SPATIAL_SHIFT = 120.0
 SCAIL2_HISTORY_CHANNELS = 4
+SCAIL2_STRENGTH_DEFAULTS = {
+    "ref_image": 1.0,
+    "ref_mask": 1.0,
+    "condition_video": 1.0,
+    "driving_mask": 1.0,
+}
 
 
 def as_scail2_list(value: Any) -> list[Any]:
@@ -14,6 +20,33 @@ def as_scail2_list(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _scail2_strength(name: str, value: Any) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"SCAIL-2 strength {name} must be a number")
+    strength = float(value)
+    if strength < 0.0 or strength > 10.0:
+        raise ValueError(f"SCAIL-2 strength {name} must be between 0.0 and 10.0")
+    return strength
+
+
+def scail2_strengths(scail2_input: dict[str, Any] | None) -> dict[str, float]:
+    if scail2_input is None:
+        return dict(SCAIL2_STRENGTH_DEFAULTS)
+    raw = scail2_input.get("strengths") or {}
+    if not isinstance(raw, dict):
+        raise ValueError("SCAIL-2 strengths must be a dict")
+    return {
+        name: _scail2_strength(name, raw.get(name, default))
+        for name, default in SCAIL2_STRENGTH_DEFAULTS.items()
+    }
+
+
+def scale_scail2_items(items: list[Any], strength: float) -> list[Any]:
+    if float(strength) == 1.0:
+        return items
+    return [item * float(strength) for item in items]
 
 
 def shape_of(value: Any, *, name: str) -> tuple[int, ...]:

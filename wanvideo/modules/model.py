@@ -28,6 +28,8 @@ from ...SCAIL.scail2_forward import (
     as_scail2_list,
     build_scail2_forward_plan,
     mark_scail2_prefix_history_channels,
+    scale_scail2_items,
+    scail2_strengths,
 )
 
 from ...MTV.mtv import apply_rotary_emb
@@ -2632,6 +2634,26 @@ class WanModel(torch.nn.Module):
             additional_ref_masks = as_scail2_list(scail2_input.get("additional_ref_masks"))
             pose_latents = as_scail2_list(scail2_input.get("pose_latents"))
             driving_masks = as_scail2_list(scail2_input.get("driving_masks"))
+            strengths = scail2_strengths(scail2_input)
+
+            ref_latents = scale_scail2_items(ref_latents, strengths["ref_image"])
+            additional_ref_latents = scale_scail2_items(
+                additional_ref_latents,
+                strengths["ref_image"],
+            )
+            ref_masks = scale_scail2_items(ref_masks, strengths["ref_mask"])
+            additional_ref_masks = scale_scail2_items(
+                additional_ref_masks,
+                strengths["ref_mask"],
+            )
+            pose_latents = scale_scail2_items(
+                pose_latents,
+                strengths["condition_video"],
+            )
+            driving_masks = scale_scail2_items(
+                driving_masks,
+                strengths["driving_mask"],
+            )
 
             scail2_pose_latents = torch.cat(pose_latents, dim=1) if pose_latents else None
             scail2_driving_masks = torch.cat(driving_masks, dim=1) if driving_masks else None

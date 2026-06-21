@@ -14,6 +14,12 @@ SCAIL2_PAYLOAD_VERSION = 1
 SCAIL2_EMBEDS_KEY = "scail2_embeds"
 SCAIL_V1_EMBEDS_KEY = "scail_embeds"
 BACKGROUND_INDEX = -1
+SCAIL2_STRENGTH_KEYS = (
+    "ref_image",
+    "ref_mask",
+    "condition_video",
+    "driving_mask",
+)
 
 
 def _field(value, name, default=None):
@@ -40,6 +46,33 @@ def _require_scail2_payload(condition):
     if native.get("embeds_key") != SCAIL2_EMBEDS_KEY:
         raise ValueError("SCAIL-2 payload targets an unsupported wrapper embeds key")
     return condition
+
+
+def _scail2_strength(name, value):
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a number")
+    strength = float(value)
+    if strength < 0.0 or strength > 10.0:
+        raise ValueError(f"{name} must be between 0.0 and 10.0")
+    return strength
+
+
+def _scail2_strengths(
+    *,
+    ref_image_strength,
+    ref_mask_strength,
+    condition_video_strength,
+    driving_mask_strength,
+):
+    return {
+        "ref_image": _scail2_strength("ref_image_strength", ref_image_strength),
+        "ref_mask": _scail2_strength("ref_mask_strength", ref_mask_strength),
+        "condition_video": _scail2_strength(
+            "condition_video_strength",
+            condition_video_strength,
+        ),
+        "driving_mask": _scail2_strength("driving_mask_strength", driving_mask_strength),
+    }
 
 
 def _latent_frame_count(num_frames):
@@ -240,6 +273,10 @@ class WanVideoAddSCAIL2ConditionEmbeds:
                     "embeds": ("WANVIDIMAGE_EMBEDS",),
                     "condition": ("SCAIL2_WANVIDEO_PAYLOAD",),
                     "vae": ("WANVAE", {"tooltip": "VAE model"}),
+                    "ref_image_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01, "tooltip": "Strength multiplier for SCAIL-2 reference image latents"}),
+                    "ref_mask_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01, "tooltip": "Strength multiplier for SCAIL-2 reference mask embeddings"}),
+                    "condition_video_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01, "tooltip": "Strength multiplier for SCAIL-2 condition video latents"}),
+                    "driving_mask_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01, "tooltip": "Strength multiplier for SCAIL-2 driving mask embeddings"}),
                 },
                 "optional": {
                     "clip_embeds": ("WANVIDIMAGE_CLIPEMBEDS", {"tooltip": "Clip vision encoded image"}),
@@ -251,7 +288,17 @@ class WanVideoAddSCAIL2ConditionEmbeds:
     FUNCTION = "add"
     CATEGORY = "WanVideoWrapper"
 
-    def add(self, embeds, condition, vae, clip_embeds=None):
+    def add(
+        self,
+        embeds,
+        condition,
+        vae,
+        ref_image_strength=1.0,
+        ref_mask_strength=1.0,
+        condition_video_strength=1.0,
+        driving_mask_strength=1.0,
+        clip_embeds=None,
+    ):
         payload = _require_scail2_payload(condition)
         updated = dict(embeds)
         if updated.get(SCAIL_V1_EMBEDS_KEY) is not None:
@@ -266,6 +313,12 @@ class WanVideoAddSCAIL2ConditionEmbeds:
         height = int(dimensions["height"])
         replace_flag = bool(payload["replace_flag"])
         clip_context = clip_embeds.get("clip_embeds", None) if clip_embeds is not None else None
+        strengths = _scail2_strengths(
+            ref_image_strength=ref_image_strength,
+            ref_mask_strength=ref_mask_strength,
+            condition_video_strength=condition_video_strength,
+            driving_mask_strength=driving_mask_strength,
+        )
 
         vae.to(device)
         ref_image = _prepare_reference_image(
@@ -318,6 +371,7 @@ class WanVideoAddSCAIL2ConditionEmbeds:
             "dimensions": payload["dimensions"],
             "segment": payload.get("segment"),
             "source": payload["source"],
+            "strengths": strengths,
             "ref_latents": [ref_latent],
             "ref_masks": [
                 _runtime_mask_to_scail2_tensor(runtime_masks["reference"], name="reference")

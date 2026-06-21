@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import types
 import unittest
@@ -298,6 +299,15 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
             "SCAIL2_WANVIDEO_PAYLOAD",
             node_cls.INPUT_TYPES()["required"]["condition"][0],
         )
+        required = node_cls.INPUT_TYPES()["required"]
+        self.assertIn("ref_image_strength", required)
+        self.assertIn("ref_mask_strength", required)
+        self.assertIn("condition_video_strength", required)
+        self.assertIn("driving_mask_strength", required)
+        self.assertEqual(1.0, required["ref_image_strength"][1]["default"])
+        self.assertEqual(1.0, required["ref_mask_strength"][1]["default"])
+        self.assertEqual(1.0, required["condition_video_strength"][1]["default"])
+        self.assertEqual(1.0, required["driving_mask_strength"][1]["default"])
 
     def test_add_materializes_scail2_embeds(self) -> None:
         module = import_scail_nodes()
@@ -332,8 +342,53 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertIs(result["clip_context"], clip_embeds["clip_embeds"])
         self.assertIsNone(scail2["segment"])
         self.assertEqual({"source_kind": "unit_test"}, scail2["source"])
+        self.assertEqual(
+            {
+                "ref_image": 1.0,
+                "ref_mask": 1.0,
+                "condition_video": 1.0,
+                "driving_mask": 1.0,
+            },
+            scail2["strengths"],
+        )
         self.assertEqual((3, 1, 8, 8), vae.encode_calls[0]["shape"])
         self.assertEqual((3, 5, 4, 4), vae.encode_calls[1]["shape"])
+
+    def test_add_stores_non_default_strength_metadata(self) -> None:
+        module = import_scail_nodes()
+        result = module.WanVideoAddSCAIL2ConditionEmbeds().add(
+            {
+                "target_shape": (16, 2, 1, 1),
+                "num_frames": 5,
+            },
+            payload(),
+            FakeVAE(),
+            ref_image_strength=1.4,
+            ref_mask_strength=0.7,
+            condition_video_strength=0.5,
+            driving_mask_strength=1.8,
+        )[0]
+
+        self.assertEqual(
+            {
+                "ref_image": 1.4,
+                "ref_mask": 0.7,
+                "condition_video": 0.5,
+                "driving_mask": 1.8,
+            },
+            result["scail2_embeds"]["strengths"],
+        )
+
+    def test_rejects_invalid_strength_metadata(self) -> None:
+        module = import_scail_nodes()
+
+        with self.assertRaisesRegex(ValueError, "ref_image_strength"):
+            module.WanVideoAddSCAIL2ConditionEmbeds().add(
+                {"target_shape": (16, 2, 1, 1), "num_frames": 5},
+                payload(),
+                FakeVAE(),
+                ref_image_strength=-0.1,
+            )
 
     def test_references_are_resized_to_payload_dimensions_before_encode(self) -> None:
         module = import_scail_nodes()
@@ -406,6 +461,23 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
                 payload(),
                 FakeVAE(),
             )
+
+    def test_scail2_example_workflow_contains_strength_widgets(self) -> None:
+        path = (
+            ROOT
+            / "example_workflows"
+            / "wanvideo_2_1_14B_SCAIL2_replacement_and_animate_dual_mode_example_01.json"
+        )
+        workflow = json.loads(path.read_text(encoding="utf-8"))
+        nodes = [
+            node
+            for node in workflow["nodes"]
+            if node.get("type") == "WanVideoAddSCAIL2ConditionEmbeds"
+        ]
+
+        self.assertTrue(nodes)
+        for node in nodes:
+            self.assertEqual([1, 1, 1, 1], node["widgets_values"])
 
 
 if __name__ == "__main__":
