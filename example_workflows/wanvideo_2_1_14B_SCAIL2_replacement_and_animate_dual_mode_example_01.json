@@ -1,8 +1,8 @@
 {
   "id": "8e186cd6-9111-4570-aa94-fccd0efefb3d",
   "revision": 0,
-  "last_node_id": 475,
-  "last_link_id": 837,
+  "last_node_id": 478,
+  "last_link_id": 852,
   "nodes": [
     {
       "id": 22,
@@ -16,7 +16,7 @@
         338
       ],
       "flags": {},
-      "order": 36,
+      "order": 34,
       "mode": 0,
       "inputs": [
         {
@@ -143,9 +143,9 @@
         "widget_ue_connectable": {}
       },
       "widgets_values": [
-        "Wan\\wan21_14B_SCAIL_2_fp16.safetensors",
-        "bf16",
-        "disabled",
+        "Wan\\wan2.1_14B_SCAIL_2_fp8_scaled.safetensors",
+        "fp16",
+        "fp8_e4m3fn_scaled",
         "main_device",
         "sageattn",
         "default"
@@ -157,15 +157,15 @@
       "id": 28,
       "type": "WanVideoDecode",
       "pos": [
-        2120.88214820555,
-        -2558.5100150907774
+        2156.8703818815693,
+        -2558.1337267059066
       ],
       "size": [
-        258.45365088367,
+        210,
         198
       ],
       "flags": {},
-      "order": 72,
+      "order": 73,
       "mode": 0,
       "inputs": [
         {
@@ -271,7 +271,7 @@
         130
       ],
       "flags": {},
-      "order": 11,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -337,8 +337,8 @@
       "id": 80,
       "type": "WanVideoSetLoRAs",
       "pos": [
-        1213.0932844033416,
-        -2570.1024633081765
+        1188.1296785853535,
+        -2588.1317341767235
       ],
       "size": [
         222.27981567382812,
@@ -347,7 +347,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 43,
+      "order": 44,
       "mode": 0,
       "inputs": [
         {
@@ -396,7 +396,7 @@
         130.36167907714844
       ],
       "flags": {},
-      "order": 34,
+      "order": 32,
       "mode": 0,
       "inputs": [
         {
@@ -479,7 +479,7 @@
         440
       ],
       "flags": {},
-      "order": 30,
+      "order": 28,
       "mode": 0,
       "inputs": [
         {
@@ -522,7 +522,7 @@
         "widget_ue_connectable": {}
       },
       "widgets_values": [
-        "149bc2b4-36bd-434a-a6d2-05909f9d6568.jpeg",
+        "Gemini_Generated_Image_buc2jnbuc2jnbuc2.png",
         "image"
       ]
     },
@@ -530,15 +530,15 @@
       "id": 137,
       "type": "VHS_VideoCombine",
       "pos": [
-        -333.09651043663774,
-        -2283.7527548009357
+        -323.6041032845054,
+        -2250.017514213479
       ],
       "size": [
-        287.28399658203125,
-        815.7469940185547
+        282.69993560361536,
+        804.8694532236789
       ],
       "flags": {},
-      "order": 66,
+      "order": 69,
       "mode": 0,
       "inputs": [
         {
@@ -647,12 +647,12 @@
             "score": "0",
             "filename": "onetotall_pose_00001.mp4",
             "workflow": "onetotall_pose_00001_p80.png",
-            "fullpath": "",
+            "fullpath": "A:\\ComfyUI\\temp\\onetotall_pose_00001.mp4",
             "format": "video/h264-mp4",
             "subfolder": "",
             "label": "Normal",
             "type": "temp",
-            "frame_rate": 30
+            "frame_rate": 16
           },
           "error": ""
         }
@@ -667,10 +667,10 @@
       ],
       "size": [
         434.2347106933594,
-        1072.910743713379
+        1068.4081925101902
       ],
       "flags": {},
-      "order": 73,
+      "order": 74,
       "mode": 0,
       "inputs": [
         {
@@ -778,14 +778,14 @@
           "hidden": false,
           "params": {
             "score": "0",
-            "filename": "SCAIL_00033-audio.mp4",
+            "filename": "SCAIL_00038-audio.mp4",
             "workflow": "WanVideo_SCAIL_00001_p80.png",
-            "fullpath": "",
+            "fullpath": "A:\\ComfyUI\\output\\SCAIL_00038-audio.mp4",
             "format": "video/nvenc_av1-mp4",
             "subfolder": "",
             "label": "Normal",
             "type": "output",
-            "frame_rate": 30
+            "frame_rate": 16
           },
           "error": ""
         }
@@ -795,8 +795,8 @@
       "id": 184,
       "type": "SetNode",
       "pos": [
-        -678.2577257410214,
-        -1896.1830810462425
+        -687.3950295605496,
+        -1889.0762891866077
       ],
       "size": [
         210,
@@ -805,7 +805,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 54,
+      "order": 55,
       "mode": 0,
       "inputs": [
         {
@@ -840,8 +840,8 @@
       "id": 185,
       "type": "SetNode",
       "pos": [
-        -518.0251527475076,
-        -1895.5729415382868
+        -517.2623759030691,
+        -1890.2335036272173
       ],
       "size": [
         210,
@@ -850,7 +850,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 55,
+      "order": 56,
       "mode": 0,
       "inputs": [
         {
@@ -895,7 +895,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 8,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -934,7 +934,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 9,
+      "order": 5,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -963,8 +963,8 @@
       "id": 206,
       "type": "SetNode",
       "pos": [
-        -580.2959086780545,
-        -2791.012740974696
+        -590.4484684775313,
+        -2767.9387414304306
       ],
       "size": [
         210,
@@ -1007,8 +1007,8 @@
       "id": 207,
       "type": "SetNode",
       "pos": [
-        -582.0030809103201,
-        -2748.936049964635
+        -593.0786006915678,
+        -2724.016130456829
       ],
       "size": [
         210,
@@ -1137,7 +1137,7 @@
         72.86605072021484
       ],
       "flags": {},
-      "order": 19,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -1186,7 +1186,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 40,
+      "order": 35,
       "mode": 0,
       "inputs": [
         {
@@ -1230,7 +1230,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -1267,7 +1267,7 @@
         150
       ],
       "flags": {},
-      "order": 74,
+      "order": 75,
       "mode": 0,
       "inputs": [
         {
@@ -1340,10 +1340,10 @@
       ],
       "size": [
         768.5992088421362,
-        1218.2935456822545
+        1215.9411117010275
       ],
       "flags": {},
-      "order": 75,
+      "order": 76,
       "mode": 0,
       "inputs": [
         {
@@ -1452,11 +1452,11 @@
           "params": {
             "filename": "WanVideo_SCAIL_00031-audio.mp4",
             "workflow": "WanVideo_SCAIL_00002.png",
-            "fullpath": "",
+            "fullpath": "A:\\ComfyUI\\output\\WanVideo_SCAIL_00031-audio.mp4",
             "format": "video/nvenc_av1-mp4",
             "subfolder": "",
             "type": "output",
-            "frame_rate": 30
+            "frame_rate": 16
           },
           "error": ""
         }
@@ -1467,14 +1467,14 @@
       "type": "CLIPVisionLoader",
       "pos": [
         81.79898735699742,
-        -1789.4704541504418
+        -1778.3026383710176
       ],
       "size": [
         380.8835245631712,
         58
       ],
       "flags": {},
-      "order": 10,
+      "order": 31,
       "mode": 0,
       "inputs": [
         {
@@ -1512,15 +1512,15 @@
       "id": 327,
       "type": "WanVideoClipVisionEncode",
       "pos": [
-        89.45562957846563,
-        -1666.659550356703
+        89.45562957846558,
+        -1668.8931135125877
       ],
       "size": [
         367.40594893902175,
         262
       ],
       "flags": {},
-      "order": 57,
+      "order": 58,
       "mode": 0,
       "inputs": [
         {
@@ -1623,9 +1623,9 @@
         "widget_ue_connectable": {}
       },
       "widgets_values": [
+        1.2,
         1,
-        1,
-        "center",
+        "disabled",
         "average",
         false,
         0,
@@ -1638,22 +1638,22 @@
       "id": 328,
       "type": "ImageConcatMulti",
       "pos": [
-        2888.979194303414,
-        -2611.2426640183403
+        2882.8212968846383,
+        -2591.2294974073434
       ],
       "size": [
         270,
         150
       ],
       "flags": {},
-      "order": 58,
+      "order": 60,
       "mode": 0,
       "inputs": [
         {
           "label": "image_1",
           "name": "image_1",
           "type": "IMAGE,MASK",
-          "link": 739
+          "link": 851
         },
         {
           "label": "image_2",
@@ -1714,15 +1714,15 @@
       "id": 334,
       "type": "NLFPredict",
       "pos": [
-        -663.3811864571558,
-        -2607.2091051689035
+        -663.9483873186801,
+        -2604.987288776424
       ],
       "size": [
         286.90301513671875,
         78
       ],
       "flags": {},
-      "order": 56,
+      "order": 57,
       "mode": 0,
       "inputs": [
         {
@@ -1784,7 +1784,7 @@
         82
       ],
       "flags": {},
-      "order": 25,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
@@ -1830,8 +1830,8 @@
       "id": 341,
       "type": "GetNode",
       "pos": [
-        -686.1022811730617,
-        -2349.2707077454847
+        -687.9482011366032,
+        -2351.116627709027
       ],
       "size": [
         210,
@@ -1879,7 +1879,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 17,
+      "order": 19,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -1908,15 +1908,15 @@
       "id": 348,
       "type": "WanVideoSamplerv2",
       "pos": [
-        1802.3412224987514,
-        -2557.882512602585
+        1818.5285135905804,
+        -2559.681100501677
       ],
       "size": [
         292.26393847730924,
-        744.4618923352912
+        741.5025016996683
       ],
       "flags": {},
-      "order": 71,
+      "order": 72,
       "mode": 0,
       "inputs": [
         {
@@ -2018,7 +2018,7 @@
       },
       "widgets_values": [
         6,
-        676005468988198,
+        32540627264824,
         "randomize",
         true,
         true
@@ -2029,14 +2029,14 @@
       "type": "WanVideoSchedulerv2",
       "pos": [
         1507.088713520658,
-        -2455.5023632861994
+        -2462.2588918327515
       ],
       "size": [
         255,
         240
       ],
       "flags": {},
-      "order": 27,
+      "order": 21,
       "mode": 0,
       "inputs": [
         {
@@ -2115,22 +2115,22 @@
       "id": 351,
       "type": "Reroute",
       "pos": [
-        -251.8401781334304,
-        -1495.609939288538
+        -390.5152635467508,
+        -1385.1320832758138
       ],
       "size": [
         75,
         26
       ],
       "flags": {},
-      "order": 51,
+      "order": 54,
       "mode": 0,
       "inputs": [
         {
           "label": "",
           "name": "",
           "type": "*",
-          "link": 760
+          "link": 850
         }
       ],
       "outputs": [
@@ -2140,9 +2140,9 @@
           "type": "IMAGE",
           "links": [
             611,
-            739,
             770,
-            798
+            798,
+            851
           ]
         }
       ],
@@ -2166,7 +2166,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 31,
+      "order": 43,
       "mode": 0,
       "inputs": [
         {
@@ -2279,15 +2279,15 @@
       "id": 355,
       "type": "WanVideoContextOptions",
       "pos": [
-        1186.6686269421932,
-        -2120.1931296331254
+        1190.0248450577226,
+        -2141.1694928551838
       ],
       "size": [
         290,
         202
       ],
       "flags": {},
-      "order": 4,
+      "order": 29,
       "mode": 0,
       "inputs": [
         {
@@ -2374,7 +2374,7 @@
       },
       "widgets_values": [
         "uniform_standard",
-        81,
+        161,
         4,
         32,
         true,
@@ -2386,15 +2386,15 @@
       "id": 362,
       "type": "RenderNLFPoses",
       "pos": [
-        -342.00655889022846,
-        -2622.108005449288
+        -349.6895343563397,
+        -2612.3080854731093
       ],
       "size": [
-        292.27583450037207,
-        242
+        304.48026401138816,
+        262
       ],
       "flags": {},
-      "order": 60,
+      "order": 63,
       "mode": 0,
       "inputs": [
         {
@@ -2416,6 +2416,12 @@
           "shape": 7,
           "type": "DWPOSES",
           "link": 633
+        },
+        {
+          "name": "pose_video_mask",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 844
         },
         {
           "label": "width",
@@ -2460,7 +2466,7 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            824
+            843
           ]
         },
         {
@@ -2494,8 +2500,8 @@
       "id": 363,
       "type": "PoseDetectionVitPoseToDWPose",
       "pos": [
-        -642.7795178941304,
-        -2475.442437123775
+        -640.1121635468131,
+        -2477.288357087316
       ],
       "size": [
         280,
@@ -2504,7 +2510,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 46,
+      "order": 47,
       "mode": 0,
       "inputs": [
         {
@@ -2551,7 +2557,7 @@
         106
       ],
       "flags": {},
-      "order": 16,
+      "order": 24,
       "mode": 0,
       "inputs": [
         {
@@ -2606,8 +2612,8 @@
       "id": 365,
       "type": "PoseDetectionVitPoseToDWPose",
       "pos": [
-        -642.7795178941304,
-        -2408.6884965414997
+        -639.4291731603031,
+        -2419.856312320923
       ],
       "size": [
         280,
@@ -2663,7 +2669,7 @@
         302
       ],
       "flags": {},
-      "order": 28,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -2772,8 +2778,8 @@
       "id": 371,
       "type": "SimpleCalculatorKJ",
       "pos": [
-        -527.9493122632223,
-        -2347.3183885796343
+        -541.8836786036615,
+        -2352.770047057805
       ],
       "size": [
         400,
@@ -2782,7 +2788,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 39,
+      "order": 36,
       "mode": 0,
       "inputs": [
         {
@@ -2862,8 +2868,8 @@
       "id": 372,
       "type": "SimpleCalculatorKJ",
       "pos": [
-        -525.0660200591012,
-        -2303.1335919540093
+        -541.8471106367485,
+        -2303.896368798448
       ],
       "size": [
         400,
@@ -2872,7 +2878,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 38,
+      "order": 37,
       "mode": 0,
       "inputs": [
         {
@@ -2952,15 +2958,15 @@
       "id": 374,
       "type": "MarkdownNote",
       "pos": [
-        -583.262729245849,
-        -2234.3924954356708
+        -612.7974486625087,
+        -2242.699135271606
       ],
       "size": [
         251.773046875,
         275.434076717529
       ],
       "flags": {},
-      "order": 2,
+      "order": 17,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -2988,7 +2994,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 7,
+      "order": 3,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -3025,7 +3031,7 @@
         513.44091796875
       ],
       "flags": {},
-      "order": 14,
+      "order": 8,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -3043,8 +3049,8 @@
       "id": 394,
       "type": "VHS_VideoInfo",
       "pos": [
-        -989.4033871911963,
-        -2757.6527619505723
+        -994.9411470818201,
+        -2727.1950825521435
       ],
       "size": [
         234.931640625,
@@ -3053,7 +3059,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 37,
+      "order": 38,
       "mode": 0,
       "inputs": [
         {
@@ -3142,7 +3148,7 @@
         342
       ],
       "flags": {},
-      "order": 13,
+      "order": 30,
       "mode": 0,
       "inputs": [
         {
@@ -3197,8 +3203,8 @@
       "id": 398,
       "type": "SetNode",
       "pos": [
-        -758.8886865161778,
-        -2747.174950342568
+        -777.3478861515899,
+        -2721.3320708529923
       ],
       "size": [
         210,
@@ -3207,7 +3213,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 45,
+      "order": 46,
       "mode": 0,
       "inputs": [
         {
@@ -3243,8 +3249,8 @@
       "id": 401,
       "type": "SetNode",
       "pos": [
-        -760.8107609664103,
-        -2788.211097345001
+        -775.5781206747398,
+        -2767.9059777460498
       ],
       "size": [
         210,
@@ -3253,7 +3259,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 44,
+      "order": 45,
       "mode": 0,
       "inputs": [
         {
@@ -3299,7 +3305,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 26,
+      "order": 23,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -3322,7 +3328,7 @@
         }
       },
       "widgets_values": [
-        1120
+        1280
       ],
       "color": "#1b4669",
       "bgcolor": "#29699c"
@@ -3339,7 +3345,7 @@
         26
       ],
       "flags": {},
-      "order": 35,
+      "order": 33,
       "mode": 0,
       "inputs": [
         {
@@ -3378,7 +3384,7 @@
         430
       ],
       "flags": {},
-      "order": 41,
+      "order": 39,
       "mode": 0,
       "inputs": [
         {
@@ -3460,7 +3466,7 @@
       "id": 416,
       "type": "ResizeImageAdvanced",
       "pos": [
-        -986.4484347795623,
+        -980.3061361008788,
         -1832.595748600358
       ],
       "size": [
@@ -3504,9 +3510,9 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            760,
             761,
-            799
+            849,
+            850
           ]
         },
         {
@@ -3557,15 +3563,15 @@
       "id": 417,
       "type": "VHS_LoadVideo",
       "pos": [
-        -1278.0655675846972,
-        -2617.3203019973607
+        -1283.1349636032705,
+        -2622.928476363794
       ],
       "size": [
         241.84130859375,
         718.6926615397135
       ],
       "flags": {},
-      "order": 15,
+      "order": 20,
       "mode": 0,
       "inputs": [
         {
@@ -3696,7 +3702,7 @@
       },
       "widgets_values": {
         "video": "snaptik_7563617421009947906_v2.mp4",
-        "force_rate": 0,
+        "force_rate": 16,
         "custom_width": 0,
         "custom_height": 0,
         "frame_load_cap": 0,
@@ -3710,7 +3716,7 @@
             "filename": "snaptik_7563617421009947906_v2.mp4",
             "type": "input",
             "format": "video/mp4",
-            "force_rate": 0,
+            "force_rate": 16,
             "custom_width": 0,
             "custom_height": 0,
             "frame_load_cap": 0,
@@ -3726,12 +3732,12 @@
       "id": 418,
       "type": "PreviewImage",
       "pos": [
-        -672.2555017627739,
-        -1832.595748600358
+        -678.3223387162489,
+        -1827.8859874031157
       ],
       "size": [
-        320.7116895499644,
-        440
+        285.55889454699104,
+        416.8700270864564
       ],
       "flags": {},
       "order": 53,
@@ -3740,7 +3746,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 799
+          "link": 849
         }
       ],
       "outputs": [],
@@ -3755,8 +3761,8 @@
       "id": 431,
       "type": "SCAILPose2ColoredMask",
       "pos": [
-        -464.2367783401059,
-        -825.301912865889
+        -460.04150569569424,
+        -823.6238038081243
       ],
       "size": [
         340,
@@ -3791,7 +3797,8 @@
           "links": [
             801,
             809,
-            812
+            812,
+            844
           ]
         },
         {
@@ -3823,7 +3830,7 @@
         166
       ],
       "flags": {},
-      "order": 47,
+      "order": 51,
       "mode": 0,
       "inputs": [
         {
@@ -4004,7 +4011,7 @@
         "widget_ue_connectable": {}
       },
       "widgets_values": [
-        0,
+        0.5,
         1,
         2
       ]
@@ -4013,15 +4020,15 @@
       "id": 440,
       "type": "CheckpointLoaderSimple",
       "pos": [
-        -1226.4819124638798,
-        -1127.1103145010259
+        -1228.3979288291118,
+        -1138.301693254964
       ],
       "size": [
         393.1847264404213,
         98
       ],
       "flags": {},
-      "order": 6,
+      "order": 25,
       "mode": 0,
       "inputs": [
         {
@@ -4089,7 +4096,7 @@
         115.328125
       ],
       "flags": {},
-      "order": 32,
+      "order": 40,
       "mode": 0,
       "inputs": [
         {
@@ -4147,7 +4154,7 @@
         115.328125
       ],
       "flags": {},
-      "order": 33,
+      "order": 41,
       "mode": 0,
       "inputs": [
         {
@@ -4205,7 +4212,7 @@
         88.51716358664714
       ],
       "flags": {},
-      "order": 70,
+      "order": 71,
       "mode": 0,
       "inputs": [
         {
@@ -4250,22 +4257,17 @@
       "id": 447,
       "type": "SCAILPose2SCAIL2Condition",
       "pos": [
-        379.148877987929,
-        -1187.6699402862407
+        376.9153148320442,
+        -1197.720974487722
       ],
       "size": [
         307.0129995528073,
-        230
+        250
       ],
       "flags": {},
       "order": 64,
       "mode": 0,
       "inputs": [
-        {
-          "name": "pose_video",
-          "type": "IMAGE",
-          "link": 825
-        },
         {
           "name": "pose_video_mask",
           "type": "IMAGE",
@@ -4280,6 +4282,18 @@
           "name": "ref_mask",
           "type": "IMAGE",
           "link": 785
+        },
+        {
+          "name": "pose_video",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 825
+        },
+        {
+          "name": "driving_video",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 852
         },
         {
           "name": "additional_ref_image",
@@ -4332,7 +4346,7 @@
         "Node name for S&R": "SCAILPose2SCAIL2Condition"
       },
       "widgets_values": [
-        "animation",
+        "replacement",
         512,
         512,
         81
@@ -4342,8 +4356,8 @@
       "id": 448,
       "type": "SetNode",
       "pos": [
-        -606.3533169257764,
-        -2662.2673744264257
+        -599.8925970533815,
+        -2663.1903344081975
       ],
       "size": [
         272.5436891741035,
@@ -4389,8 +4403,8 @@
       "id": 449,
       "type": "GetNode",
       "pos": [
-        1173.0556637791992,
-        -2540.747734481044
+        1207.7176304574753,
+        -2523.6656937665916
       ],
       "size": [
         210,
@@ -4399,7 +4413,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 24,
+      "order": 22,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -4426,15 +4440,15 @@
       "id": 452,
       "type": "VHS_VideoCombine",
       "pos": [
-        -70.67011380184582,
-        -1257.2636454341714
+        -39.37652110795238,
+        -1237.2850856437717
       ],
       "size": [
-        402.9730543220205,
-        1018.202845063536
+        290.651983241861,
+        818.2640743943612
       ],
       "flags": {},
-      "order": 63,
+      "order": 62,
       "mode": 0,
       "inputs": [
         {
@@ -4564,15 +4578,15 @@
           "hidden": false,
           "params": {
             "score": "0",
-            "filename": "SCAIL2_pose_00001.mp4",
-            "cos_url": "",
+            "filename": "SCAIL2_pose_00002.mp4",
+            "cos_url": "https://rh-images.xiaoyaoyou.com//8696605c7318b5f10dd8c8741df992bb/temp/Wan21_SCAIL2_00002_p80_fgiis_1781098496.mp4",
             "workflow": "Wan21_SCAIL2_00001.png",
-            "fullpath": "",
+            "fullpath": "A:\\ComfyUI\\temp\\SCAIL2_pose_00002.mp4",
             "format": "video/h264-mp4",
             "subfolder": "",
             "label": "Normal",
             "type": "temp",
-            "frame_rate": 30
+            "frame_rate": 16
           },
           "error": ""
         }
@@ -4668,8 +4682,8 @@
       "id": 460,
       "type": "PreviewImage",
       "pos": [
-        -431.5258213512094,
-        -633.0258295188065
+        -430.174515641899,
+        -647.7550617502887
       ],
       "size": [
         272.69543259293107,
@@ -4697,8 +4711,8 @@
       "id": 461,
       "type": "SetNode",
       "pos": [
-        -274.5548348233729,
-        -2333.6139569984007
+        -263.91882858544426,
+        -2303.6960039414676
       ],
       "size": [
         210,
@@ -4707,13 +4721,13 @@
       "flags": {
         "collapsed": true
       },
-      "order": 62,
+      "order": 66,
       "mode": 0,
       "inputs": [
         {
           "name": "IMAGE",
           "type": "IMAGE",
-          "link": 824
+          "link": 843
         }
       ],
       "outputs": [
@@ -4741,8 +4755,8 @@
       "id": 462,
       "type": "GetNode",
       "pos": [
-        392.15796880356845,
-        -1241.2847857040208
+        361.1239806098559,
+        -1244.1433927916055
       ],
       "size": [
         210,
@@ -4751,7 +4765,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 5,
+      "order": 26,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -4786,7 +4800,7 @@
         202
       ],
       "flags": {},
-      "order": 12,
+      "order": 7,
       "mode": 4,
       "inputs": [],
       "outputs": [
@@ -4825,7 +4839,7 @@
         198.4283944640215
       ],
       "flags": {},
-      "order": 20,
+      "order": 10,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -4851,7 +4865,7 @@
         88
       ],
       "flags": {},
-      "order": 21,
+      "order": 11,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -4877,7 +4891,7 @@
         107.65535577178764
       ],
       "flags": {},
-      "order": 23,
+      "order": 13,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -4905,7 +4919,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 22,
+      "order": 12,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -4942,7 +4956,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 29,
+      "order": 16,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -4977,7 +4991,7 @@
         242
       ],
       "flags": {},
-      "order": 69,
+      "order": 70,
       "mode": 0,
       "inputs": [
         {
@@ -5020,6 +5034,43 @@
         0,
         1
       ]
+    },
+    {
+      "id": 478,
+      "type": "GetNode",
+      "pos": [
+        529.1687444784222,
+        -1245.4902742930578
+      ],
+      "size": [
+        210,
+        50
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 27,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            852
+          ]
+        }
+      ],
+      "title": "Get_driving_video",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "driving_video"
+      ],
+      "color": "#006691",
+      "bgcolor": "rgba(24,24,27,.9)"
     }
   ],
   "links": [
@@ -5148,7 +5199,7 @@
       371,
       1,
       362,
-      3,
+      4,
       "INT"
     ],
     [
@@ -5164,7 +5215,7 @@
       372,
       1,
       362,
-      4,
+      5,
       "INT"
     ],
     [
@@ -5392,14 +5443,6 @@
       "INT"
     ],
     [
-      739,
-      351,
-      0,
-      328,
-      0,
-      "IMAGE"
-    ],
-    [
       740,
       209,
       0,
@@ -5414,14 +5457,6 @@
       416,
       2,
       "INT"
-    ],
-    [
-      760,
-      416,
-      0,
-      351,
-      0,
-      "IMAGE"
     ],
     [
       761,
@@ -5524,7 +5559,7 @@
       431,
       1,
       447,
-      3,
+      2,
       "IMAGE"
     ],
     [
@@ -5580,15 +5615,7 @@
       351,
       0,
       447,
-      2,
-      "IMAGE"
-    ],
-    [
-      799,
-      416,
-      0,
-      418,
-      0,
+      1,
       "IMAGE"
     ],
     [
@@ -5612,7 +5639,7 @@
       394,
       6,
       447,
-      8,
+      9,
       "INT"
     ],
     [
@@ -5636,7 +5663,7 @@
       431,
       0,
       447,
-      1,
+      0,
       "IMAGE"
     ],
     [
@@ -5664,19 +5691,11 @@
       "IMAGE"
     ],
     [
-      824,
-      362,
-      0,
-      461,
-      0,
-      "IMAGE"
-    ],
-    [
       825,
       462,
       0,
       447,
-      0,
+      3,
       "IMAGE"
     ],
     [
@@ -5708,7 +5727,7 @@
       473,
       0,
       447,
-      7,
+      8,
       "INT"
     ],
     [
@@ -5716,7 +5735,7 @@
       474,
       0,
       447,
-      6,
+      7,
       "INT"
     ],
     [
@@ -5750,6 +5769,54 @@
       475,
       0,
       "WANVAE"
+    ],
+    [
+      843,
+      362,
+      0,
+      461,
+      0,
+      "IMAGE"
+    ],
+    [
+      844,
+      431,
+      0,
+      362,
+      3,
+      "IMAGE"
+    ],
+    [
+      849,
+      416,
+      0,
+      418,
+      0,
+      "IMAGE"
+    ],
+    [
+      850,
+      416,
+      0,
+      351,
+      0,
+      "IMAGE"
+    ],
+    [
+      851,
+      351,
+      0,
+      328,
+      0,
+      "IMAGE"
+    ],
+    [
+      852,
+      478,
+      0,
+      447,
+      4,
+      "IMAGE"
     ]
   ],
   "groups": [
@@ -5887,10 +5954,10 @@
       "comfy-core": "0.3.26"
     },
     "ds": {
-      "scale": 0.146410000000003,
+      "scale": 0.23579476910002278,
       "offset": [
-        4031.1789806923744,
-        4529.55966405444
+        1696.756666773961,
+        3235.533753969183
       ]
     }
   },
