@@ -25,6 +25,7 @@ class ScailPose2MaskContractTests(unittest.TestCase):
             mask,
             latent_shape=(1, 2, 2),
             channel_count=3,
+            latent_grow_pixels=0,
         )
 
         self.assertTrue(is_scail_pose2_replacement_noise_mask(mask))
@@ -37,6 +38,8 @@ class ScailPose2MaskContractTests(unittest.TestCase):
         self.assertEqual(1.0, float(latent_mask[0, 0, 0, 1, 1].item()))
         self.assertAlmostEqual(0.5, contract.subject_ratio)
         self.assertAlmostEqual(0.5, contract.preserve_ratio)
+        self.assertEqual(0, contract.latent_grow_pixels)
+        self.assertAlmostEqual(0.5, contract.pre_grow_subject_ratio)
 
     def test_untagged_mask_keeps_trilinear_policy(self) -> None:
         import torch
@@ -91,6 +94,28 @@ class ScailPose2MaskContractTests(unittest.TestCase):
 
         self.assertEqual((1, 1, 2, 1, 1), tuple(latent_mask.shape))
         self.assertEqual("resize_full_4_then_slice_1_3", contract.frame_policy)
+
+    def test_replacement_latent_grow_is_spatial_only(self) -> None:
+        import torch
+
+        mask = torch.zeros((2, 5, 5), dtype=torch.float32)
+        mask[:, 2, 2] = 1.0
+        setattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "replacement")
+        setattr(mask, SCAIL_POSE2_MASK_ROLE_ATTR, SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE)
+
+        latent_mask, contract = resize_noise_mask_for_latents(
+            mask,
+            latent_shape=(2, 5, 5),
+            channel_count=1,
+            latent_grow_pixels=1,
+        )
+
+        self.assertEqual((1, 1, 2, 5, 5), tuple(latent_mask.shape))
+        self.assertEqual(1, contract.latent_grow_pixels)
+        self.assertAlmostEqual(1.0 / 25.0, contract.pre_grow_subject_ratio)
+        self.assertAlmostEqual(9.0 / 25.0, contract.subject_ratio)
+        self.assertEqual(9.0, float(latent_mask[0, 0, 0].sum().item()))
+        self.assertEqual(9.0, float(latent_mask[0, 0, 1].sum().item()))
 
 
 if __name__ == "__main__":

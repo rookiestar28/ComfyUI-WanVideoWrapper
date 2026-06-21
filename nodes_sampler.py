@@ -18,7 +18,7 @@ from .SCAIL.scail2_routing import (
     prepare_scail2_data,
     scail2_context_window_input,
 )
-from .scail_pose2_mask_contract import resize_noise_mask_for_latents
+from .scail_pose2_mask_contract import apply_samples_to_noise, resize_noise_mask_for_latents
 from .enhance_a_video.globals import set_enhance_weight, set_num_frames
 from .WanMove.trajectory import replace_feature
 from contextlib import nullcontext
@@ -739,13 +739,8 @@ class WanVideoSampler:
                 if input_samples.shape[1] != noise.shape[1]:
                     input_samples = torch.cat([input_samples[:, :1].repeat(1, noise.shape[1] - input_samples.shape[1], 1, 1), input_samples], dim=1)
 
-                if add_noise_to_samples:
-                    latent_timestep = timesteps[:1].to(noise)
-                    noise = noise * latent_timestep / 1000 + (1 - latent_timestep / 1000) * input_samples
-                else:
-                    noise = input_samples
-
                 noise_mask = samples.get("noise_mask", None)
+                noise_mask_contract = None
                 if noise_mask is not None:
                     log.info(f"Latent noise_mask shape: {noise_mask.shape}")
                     original_image = samples.get("original_image", None)
@@ -755,8 +750,23 @@ class WanVideoSampler:
                         noise_mask,
                         latent_shape=(noise.shape[1], noise.shape[2], noise.shape[3]),
                         channel_count=noise.shape[0],
+                        latent_grow_pixels=1,
                     )
                     log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
+
+                noise, samples_init_contract = apply_samples_to_noise(
+                    noise,
+                    input_samples,
+                    noise_mask=noise_mask,
+                    timestep=timesteps[:1].to(noise),
+                    add_noise_to_samples=add_noise_to_samples,
+                    scail_pose2_replacement=(
+                        noise_mask_contract.scail_pose2_replacement
+                        if noise_mask_contract is not None
+                        else False
+                    ),
+                )
+                log.info(f"WanVideoSampler: {samples_init_contract.to_log_string()}")
 
         # extra latents (Pusa) and 5b
         latents_to_insert = add_index = noise_multipliers = None
@@ -2345,20 +2355,14 @@ class WanVideoSampler:
                                     #     last_frame = input_samples[:, -1:].repeat(1, pad_length, 1, 1)
                                     #     input_samples = torch.cat([input_samples, last_frame], dim=1)
                                     # input_samples = input_samples[:, latent_start_idx:latent_end_idx]
-                                    if noise_mask is not None:
-                                        original_image = input_samples.to(device)
-
                                     assert input_samples.shape[1] == noise.shape[1], f"Slice mismatch: {input_samples.shape[1]} vs {noise.shape[1]}"
-
-                                    if add_noise_to_samples:
-                                        latent_timestep = timesteps[0]
-                                        noise = noise * latent_timestep / 1000 + (1 - latent_timestep / 1000) * input_samples
-                                    else:
-                                        noise = input_samples
 
                                 # diff diff prep
                                 noise_mask = samples.get("noise_mask", None)
+                                noise_mask_contract = None
                                 if noise_mask is not None:
+                                    if input_samples is not None:
+                                        original_image = input_samples.to(device)
                                     noise_mask, noise_mask_contract = resize_noise_mask_for_latents(
                                         noise_mask,
                                         latent_shape=(noise.shape[1], noise.shape[2], noise.shape[3]),
@@ -2366,12 +2370,27 @@ class WanVideoSampler:
                                         start_latent=start_latent,
                                         end_latent=end_latent,
                                         source_latent_frame_count=input_samples.shape[1] if input_samples is not None else None,
+                                        latent_grow_pixels=1,
                                     )
                                     log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
 
                                     thresholds = torch.arange(len(timesteps), dtype=original_image.dtype) / len(timesteps)
                                     thresholds = thresholds.reshape(-1, 1, 1, 1, 1).to(device)
                                     masks = (1-noise_mask.repeat(len(timesteps), 1, 1, 1, 1).to(device)) > thresholds
+                                if input_samples is not None:
+                                    noise, samples_init_contract = apply_samples_to_noise(
+                                        noise,
+                                        input_samples,
+                                        noise_mask=noise_mask,
+                                        timestep=timesteps[0],
+                                        add_noise_to_samples=add_noise_to_samples,
+                                        scail_pose2_replacement=(
+                                            noise_mask_contract.scail_pose2_replacement
+                                            if noise_mask_contract is not None
+                                            else False
+                                        ),
+                                    )
+                                    log.info(f"WanVideoSampler: {samples_init_contract.to_log_string()}")
 
                             if isinstance(scheduler, dict):
                                 sample_scheduler = copy.deepcopy(scheduler["sample_scheduler"])

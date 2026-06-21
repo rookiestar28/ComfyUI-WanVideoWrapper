@@ -22,6 +22,8 @@ class NoiseMaskLatentContract:
     frame_policy: str
     subject_ratio: float
     preserve_ratio: float
+    pre_grow_subject_ratio: float
+    latent_grow_pixels: int
 
     def to_log_string(self) -> str:
         return (
@@ -33,6 +35,27 @@ class NoiseMaskLatentContract:
             f"mode={self.interpolation_mode} "
             f"scail_pose2_replacement={self.scail_pose2_replacement} "
             f"frame_policy={self.frame_policy} "
+            f"latent_grow_pixels={self.latent_grow_pixels} "
+            f"pre_grow_subject_ratio={self.pre_grow_subject_ratio:.6f} "
+            f"subject_ratio={self.subject_ratio:.6f} "
+            f"preserve_ratio={self.preserve_ratio:.6f}"
+        )
+
+
+@dataclass(frozen=True)
+class SamplesInitializationContract:
+    add_noise_to_samples: bool
+    scail_pose2_replacement: bool
+    mask_aware: bool
+    subject_ratio: float
+    preserve_ratio: float
+
+    def to_log_string(self) -> str:
+        return (
+            "samples_initialization_contract "
+            f"add_noise_to_samples={self.add_noise_to_samples} "
+            f"scail_pose2_replacement={self.scail_pose2_replacement} "
+            f"mask_aware={self.mask_aware} "
             f"subject_ratio={self.subject_ratio:.6f} "
             f"preserve_ratio={self.preserve_ratio:.6f}"
         )
@@ -64,6 +87,13 @@ def _positive_channel_count(channel_count: Any) -> int:
     return parsed
 
 
+def _non_negative_grow_pixels(latent_grow_pixels: Any) -> int:
+    parsed = int(latent_grow_pixels)
+    if parsed < 0:
+        raise ValueError("latent_grow_pixels must be non-negative")
+    return parsed
+
+
 def resize_noise_mask_for_latents(
     noise_mask: Any,
     *,
@@ -72,13 +102,13 @@ def resize_noise_mask_for_latents(
     start_latent: int | None = None,
     end_latent: int | None = None,
     source_latent_frame_count: int | None = None,
+    latent_grow_pixels: Any = 0,
 ) -> tuple[Any, NoiseMaskLatentContract]:
     """Resize a sampler `noise_mask` to `[1, C, T, H, W]` latent mask shape."""
 
-    import torch.nn.functional as F
-
     target_frames, target_height, target_width = _positive_latent_shape(latent_shape)
     channels = _positive_channel_count(channel_count)
+    grow_pixels = _non_negative_grow_pixels(latent_grow_pixels)
     original_shape = _shape_tuple(noise_mask)
     scail_pose2_replacement = is_scail_pose2_replacement_noise_mask(noise_mask)
     prepared = noise_mask
@@ -130,6 +160,9 @@ def resize_noise_mask_for_latents(
         target_width=target_width,
         scail_pose2_replacement=scail_pose2_replacement,
     )
+    pre_grow_subject_ratio = float(resized_3d.float().mean().item())
+    if scail_pose2_replacement and grow_pixels > 0:
+        resized_3d = _grow_spatial_binary_mask(resized_3d, grow_pixels)
     resized = resized_3d.unsqueeze(0).unsqueeze(0)
     subject_ratio = float(resized.float().mean().item())
     contract = NoiseMaskLatentContract(
@@ -142,6 +175,8 @@ def resize_noise_mask_for_latents(
         frame_policy=frame_policy,
         subject_ratio=subject_ratio,
         preserve_ratio=1.0 - subject_ratio,
+        pre_grow_subject_ratio=pre_grow_subject_ratio,
+        latent_grow_pixels=grow_pixels if scail_pose2_replacement else 0,
     )
     return resized.repeat(1, channels, 1, 1, 1), contract
 
@@ -172,3 +207,93 @@ def _resize_prepared_mask(
             align_corners=False,
         )
     return resized.squeeze(0).squeeze(0)
+
+
+def _grow_spatial_binary_mask(mask: Any, grow_pixels: int) -> Any:
+    import torch.nn.functional as F
+
+    kernel = grow_pixels * 2 + 1
+    view = mask.unsqueeze(0).unsqueeze(0).float()
+    grown = F.max_pool3d(
+        view,
+        kernel_size=(1, kernel, kernel),
+        stride=1,
+        padding=(0, grow_pixels, grow_pixels),
+    )
+    return (grown.squeeze(0).squeeze(0) >= 0.5).to(dtype=mask.dtype)
+
+
+def apply_samples_to_noise(
+    noise: Any,
+    input_samples: Any,
+    *,
+    noise_mask: Any | None,
+    timestep: Any,
+    add_noise_to_samples: bool,
+    scail_pose2_replacement: bool,
+) -> tuple[Any, SamplesInitializationContract]:
+    """Apply input samples to sampler noise with SCAIL-Pose2 mask awareness."""
+
+    if input_samples is None:
+        raise ValueError("input_samples must not be None")
+    if tuple(input_samples.shape) != tuple(noise.shape):
+        raise ValueError(
+            "input_samples and noise must share shape, "
+            f"got {tuple(input_samples.shape)} and {tuple(noise.shape)}"
+        )
+
+    if add_noise_to_samples:
+        scale = _noise_timestep_scale(timestep, noise)
+        initialized_from_samples = noise * scale + (1.0 - scale) * input_samples
+    else:
+        initialized_from_samples = input_samples
+
+    if scail_pose2_replacement and noise_mask is not None:
+        subject_mask = _mask_like_noise(noise_mask, noise)
+        preserve_mask = 1.0 - subject_mask
+        initialized = initialized_from_samples * preserve_mask + noise * subject_mask
+        subject_ratio = float(subject_mask.float().mean().item())
+        return initialized, SamplesInitializationContract(
+            add_noise_to_samples=bool(add_noise_to_samples),
+            scail_pose2_replacement=True,
+            mask_aware=True,
+            subject_ratio=subject_ratio,
+            preserve_ratio=1.0 - subject_ratio,
+        )
+
+    return initialized_from_samples, SamplesInitializationContract(
+        add_noise_to_samples=bool(add_noise_to_samples),
+        scail_pose2_replacement=bool(scail_pose2_replacement),
+        mask_aware=False,
+        subject_ratio=0.0,
+        preserve_ratio=1.0,
+    )
+
+
+def _noise_timestep_scale(timestep: Any, noise: Any) -> Any:
+    import torch
+
+    if torch.is_tensor(timestep):
+        timestep_value = timestep.to(device=noise.device, dtype=noise.dtype).reshape(-1)[0]
+    else:
+        timestep_value = torch.tensor(timestep, device=noise.device, dtype=noise.dtype)
+    return timestep_value / 1000.0
+
+
+def _mask_like_noise(noise_mask: Any, noise: Any) -> Any:
+    mask = noise_mask
+    if len(mask.shape) == len(noise.shape) + 1 and int(mask.shape[0]) == 1:
+        mask = mask.squeeze(0)
+    if len(mask.shape) != len(noise.shape):
+        raise ValueError(
+            "noise_mask must have shape [C,T,H,W] or [1,C,T,H,W], "
+            f"got {tuple(noise_mask.shape)} for noise {tuple(noise.shape)}"
+        )
+    if int(mask.shape[0]) == 1 and int(noise.shape[0]) != 1:
+        mask = mask.repeat(int(noise.shape[0]), 1, 1, 1)
+    if tuple(mask.shape) != tuple(noise.shape):
+        raise ValueError(
+            "noise_mask and noise must share broadcasted shape, "
+            f"got {tuple(mask.shape)} and {tuple(noise.shape)}"
+        )
+    return mask.to(device=noise.device, dtype=noise.dtype).clamp(0.0, 1.0)
