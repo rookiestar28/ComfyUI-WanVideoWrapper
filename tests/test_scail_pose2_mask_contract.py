@@ -72,6 +72,26 @@ class ScailPose2MaskContractTests(unittest.TestCase):
         self.assertEqual((1, 1, 2, 1, 1), tuple(latent_mask.shape))
         self.assertEqual("slice_1_3", contract.frame_policy)
 
+    def test_context_slice_resizes_full_source_timeline_before_slice(self) -> None:
+        import torch
+
+        mask = torch.zeros((8, 2, 2), dtype=torch.float32)
+        mask[4:] = 1.0
+        setattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "replacement")
+        setattr(mask, SCAIL_POSE2_MASK_ROLE_ATTR, SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE)
+
+        latent_mask, contract = resize_noise_mask_for_latents(
+            mask,
+            latent_shape=(2, 1, 1),
+            channel_count=1,
+            start_latent=1,
+            end_latent=3,
+            source_latent_frame_count=4,
+        )
+
+        self.assertEqual((1, 1, 2, 1, 1), tuple(latent_mask.shape))
+        self.assertEqual("resize_full_4_then_slice_1_3", contract.frame_policy)
+
 
 if __name__ == "__main__":
     unittest.main()

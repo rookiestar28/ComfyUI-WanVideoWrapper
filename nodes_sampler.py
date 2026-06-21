@@ -2365,6 +2365,7 @@ class WanVideoSampler:
                                         channel_count=noise.shape[0],
                                         start_latent=start_latent,
                                         end_latent=end_latent,
+                                        source_latent_frame_count=input_samples.shape[1] if input_samples is not None else None,
                                     )
                                     log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
 

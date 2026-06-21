@@ -156,6 +156,26 @@ class SCAIL2RoutingTests(unittest.TestCase):
         self.assertEqual((16, 2, 2, 2), result["pose_latents"][0].shape)
         self.assertEqual((28, 2, 2, 2), result["driving_masks"][0].shape)
 
+    def test_context_window_rejects_pose_mask_frame_count_mismatch(self) -> None:
+        module = import_routing_module()
+        scail2_data = {
+            "pose_latents": [FakeTemporalTensor((16, 5, 2, 2), name="pose_latents")],
+            "driving_masks": [FakeTemporalTensor((28, 4, 2, 2), name="driving_masks")],
+        }
+
+        with self.assertRaisesRegex(ValueError, "pose_latents frames=.*driving_masks"):
+            module.scail2_context_window_input(scail2_data, [0, 1, 2])
+
+    def test_context_window_rejects_out_of_range_indices_before_slicing(self) -> None:
+        module = import_routing_module()
+        scail2_data = {
+            "pose_latents": [FakeTemporalTensor((16, 5, 2, 2), name="pose_latents")],
+            "driving_masks": [FakeTemporalTensor((28, 5, 2, 2), name="driving_masks")],
+        }
+
+        with self.assertRaisesRegex(ValueError, "field=pose_latents.*frame_count=5"):
+            module.scail2_context_window_input(scail2_data, [0, 4, 5])
+
     def test_context_window_rejects_scalar_window(self) -> None:
         module = import_routing_module()
         scail2_data = {"pose_latents": [FakeTemporalTensor((16, 5, 2, 2))]}

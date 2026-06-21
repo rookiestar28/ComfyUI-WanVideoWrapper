@@ -71,6 +71,7 @@ def resize_noise_mask_for_latents(
     channel_count: Any,
     start_latent: int | None = None,
     end_latent: int | None = None,
+    source_latent_frame_count: int | None = None,
 ) -> tuple[Any, NoiseMaskLatentContract]:
     """Resize a sampler `noise_mask` to `[1, C, T, H, W]` latent mask shape."""
 
@@ -88,7 +89,28 @@ def resize_noise_mask_for_latents(
         raise ValueError("noise_mask must have shape [T,H,W] or [T,1,H,W]")
 
     frame_policy = "direct"
-    if prepared.shape[0] < target_frames:
+    if (
+        start_latent is not None
+        and end_latent is not None
+        and source_latent_frame_count is not None
+        and int(prepared.shape[0]) != int(source_latent_frame_count)
+    ):
+        source_frames = int(source_latent_frame_count)
+        if source_frames <= 0:
+            raise ValueError("source_latent_frame_count must be positive")
+        prepared = _resize_prepared_mask(
+            prepared,
+            target_frames=source_frames,
+            target_height=target_height,
+            target_width=target_width,
+            scail_pose2_replacement=scail_pose2_replacement,
+        )
+        prepared = prepared[int(start_latent):int(end_latent)]
+        frame_policy = (
+            f"resize_full_{source_frames}_then_slice_"
+            f"{int(start_latent)}_{int(end_latent)}"
+        )
+    elif prepared.shape[0] < target_frames:
         repeat_count = max(1, target_frames // int(prepared.shape[0]))
         if repeat_count > 1:
             prepared = prepared.repeat(repeat_count, 1, 1)
@@ -101,6 +123,39 @@ def resize_noise_mask_for_latents(
 
     prepared_shape = _shape_tuple(prepared)
     interpolation_mode = "nearest" if scail_pose2_replacement else "trilinear"
+    resized_3d = _resize_prepared_mask(
+        prepared,
+        target_frames=target_frames,
+        target_height=target_height,
+        target_width=target_width,
+        scail_pose2_replacement=scail_pose2_replacement,
+    )
+    resized = resized_3d.unsqueeze(0).unsqueeze(0)
+    subject_ratio = float(resized.float().mean().item())
+    contract = NoiseMaskLatentContract(
+        original_shape=original_shape,
+        prepared_shape=prepared_shape,
+        latent_shape=(target_frames, target_height, target_width),
+        channel_count=channels,
+        interpolation_mode=interpolation_mode,
+        scail_pose2_replacement=scail_pose2_replacement,
+        frame_policy=frame_policy,
+        subject_ratio=subject_ratio,
+        preserve_ratio=1.0 - subject_ratio,
+    )
+    return resized.repeat(1, channels, 1, 1, 1), contract
+
+
+def _resize_prepared_mask(
+    prepared: Any,
+    *,
+    target_frames: int,
+    target_height: int,
+    target_width: int,
+    scail_pose2_replacement: bool,
+) -> Any:
+    import torch.nn.functional as F
+
     view = prepared.unsqueeze(0).unsqueeze(0)
     if scail_pose2_replacement:
         resized = F.interpolate(
@@ -116,17 +171,4 @@ def resize_noise_mask_for_latents(
             mode="trilinear",
             align_corners=False,
         )
-
-    subject_ratio = float(resized.float().mean().item())
-    contract = NoiseMaskLatentContract(
-        original_shape=original_shape,
-        prepared_shape=prepared_shape,
-        latent_shape=(target_frames, target_height, target_width),
-        channel_count=channels,
-        interpolation_mode=interpolation_mode,
-        scail_pose2_replacement=scail_pose2_replacement,
-        frame_policy=frame_policy,
-        subject_ratio=subject_ratio,
-        preserve_ratio=1.0 - subject_ratio,
-    )
-    return resized.repeat(1, channels, 1, 1, 1), contract
+    return resized.squeeze(0).squeeze(0)
