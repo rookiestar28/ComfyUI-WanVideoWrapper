@@ -51,6 +51,7 @@ def append_scail2_history_channels(
     *,
     patch_embedding: Any,
     name: str = "SCAIL-2 main latent",
+    fill_value: float = 0.0,
 ) -> Any:
     latent_shape = shape_of(latent, name=name)
     if len(latent_shape) != 4:
@@ -68,8 +69,46 @@ def append_scail2_history_channels(
         import torch
     except ModuleNotFoundError as exc:  # pragma: no cover - runtime requires torch
         raise RuntimeError("torch is required to append SCAIL-2 history channels") from exc
-    history = latent.new_zeros((needed, *latent_shape[1:]))
+    history_shape = (needed, *latent_shape[1:])
+    if float(fill_value) == 0.0:
+        history = latent.new_zeros(history_shape)
+    else:
+        history = latent.new_full(history_shape, float(fill_value))
     return torch.cat([latent, history], dim=0)
+
+
+def mark_scail2_prefix_history_channels(
+    latent: Any,
+    *,
+    prefix_frames: int,
+    patch_embedding: Any,
+    name: str = "SCAIL-2 main latent",
+    fill_value: float = 1.0,
+) -> Any:
+    latent_shape = shape_of(latent, name=name)
+    if len(latent_shape) != 4:
+        raise ValueError(f"{name} must be CTHW, got {latent_shape}")
+    prefix_frames = int(prefix_frames)
+    if prefix_frames <= 0:
+        return latent
+    if prefix_frames > latent_shape[1]:
+        raise ValueError(
+            f"{name} prefix_frames={prefix_frames} exceeds latent frame count {latent_shape[1]}"
+        )
+
+    patch_channels = patch_embedding_input_channels(patch_embedding)
+    if patch_channels is not None and patch_channels != latent_shape[0]:
+        raise ValueError(
+            "SCAIL-2 main latent channel mismatch after history append: "
+            f"patch embedding expects {patch_channels}, got {latent_shape[0]}"
+        )
+    needed = SCAIL2_HISTORY_CHANNELS
+    if latent_shape[0] < needed:
+        raise ValueError(f"{name} has fewer channels than SCAIL-2 history channels")
+
+    marked = latent.clone()
+    marked[-needed:, :prefix_frames] = float(fill_value)
+    return marked
 
 
 def latent_frames(items: list[Any], *, name: str) -> int:

@@ -27,6 +27,7 @@ from ...SCAIL.scail2_forward import (
     append_scail2_history_channels,
     as_scail2_list,
     build_scail2_forward_plan,
+    mark_scail2_prefix_history_channels,
 )
 
 from ...MTV.mtv import apply_rotary_emb
@@ -2687,8 +2688,13 @@ class WanModel(torch.nn.Module):
             input_dtype = x[0].dtype
             if scail2_input is not None:
                 x = [
-                    append_scail2_history_channels(
-                        u,
+                    mark_scail2_prefix_history_channels(
+                        append_scail2_history_channels(
+                            u,
+                            patch_embedding=patch_embedding,
+                            name="SCAIL-2 main latent",
+                        ),
+                        prefix_frames=scail2_plan["prefix_frames"],
                         patch_embedding=patch_embedding,
                         name="SCAIL-2 main latent",
                     )
@@ -2782,6 +2788,7 @@ class WanModel(torch.nn.Module):
                     scail2_pose_latents,
                     patch_embedding=self.patch_embedding_pose,
                     name="SCAIL-2 pose latent",
+                    fill_value=1.0,
                 )
                 scail2_x = self.patch_embedding_pose(scail2_pose_latents.unsqueeze(0).to(torch.float32)).to(x[0].dtype)
             if scail2_driving_masks is not None:

@@ -33,13 +33,23 @@ class FakePatchEmbedding:
 
 
 class FakeLatent:
-    def __init__(self, shape, *, fill=1.0, parts=()):
+    def __init__(self, shape, *, fill=1.0, parts=(), writes=()):
         self.shape = tuple(shape)
         self.fill = fill
         self.parts = tuple(parts)
+        self.writes = tuple(writes)
 
     def new_zeros(self, shape):
         return FakeLatent(shape, fill=0.0)
+
+    def new_full(self, shape, fill_value):
+        return FakeLatent(shape, fill=float(fill_value))
+
+    def clone(self):
+        return FakeLatent(self.shape, fill=self.fill, parts=self.parts, writes=self.writes)
+
+    def __setitem__(self, key, value):
+        self.writes = (*self.writes, (key, value))
 
 
 class FakeTorchModule:
@@ -90,6 +100,39 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIs(latent, expanded.parts[0])
         self.assertEqual((4, 2, 4, 4), expanded.parts[1].shape)
         self.assertEqual(0.0, expanded.parts[1].fill)
+
+    def test_history_channels_can_be_filled_for_reference_or_pose_markers(self) -> None:
+        module = import_forward_module()
+        embedding = FakePatchEmbedding(20)
+        latent = FakeLatent((16, 2, 4, 4))
+
+        with fake_torch_module():
+            expanded = module.append_scail2_history_channels(
+                latent,
+                patch_embedding=embedding,
+                fill_value=1.0,
+            )
+
+        self.assertEqual((20, 2, 4, 4), tuple(expanded.shape))
+        self.assertEqual((4, 2, 4, 4), expanded.parts[1].shape)
+        self.assertEqual(1.0, expanded.parts[1].fill)
+
+    def test_reference_prefix_history_channels_are_marked(self) -> None:
+        module = import_forward_module()
+        embedding = FakePatchEmbedding(20)
+        latent = FakeLatent((20, 5, 4, 4))
+
+        marked = module.mark_scail2_prefix_history_channels(
+            latent,
+            prefix_frames=2,
+            patch_embedding=embedding,
+        )
+
+        self.assertIsNot(latent, marked)
+        self.assertEqual((20, 5, 4, 4), marked.shape)
+        self.assertEqual(1, len(marked.writes))
+        self.assertEqual((slice(-4, None, None), slice(None, 2, None)), marked.writes[0][0])
+        self.assertEqual(1.0, marked.writes[0][1])
 
     def test_history_channels_are_noop_when_channels_already_match(self) -> None:
         module = import_forward_module()
@@ -228,6 +271,7 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIn("if scail_input is not None:", model_source)
         self.assertIn("if scail2_input is not None:", model_source)
         self.assertIn("append_scail2_history_channels", model_source)
+        self.assertIn("mark_scail2_prefix_history_channels", model_source)
 
     def test_model_pads_scail2_pose_latents_before_pose_patch_embedding(self) -> None:
         model_source = (ROOT / "wanvideo" / "modules" / "model.py").read_text(encoding="utf-8")
@@ -235,6 +279,14 @@ class SCAIL2ForwardPlanTests(unittest.TestCase):
         self.assertIn("append_scail2_history_channels(\n                    scail2_pose_latents", model_source)
         self.assertIn("patch_embedding=self.patch_embedding_pose", model_source)
         self.assertIn('name="SCAIL-2 pose latent"', model_source)
+        self.assertIn("fill_value=1.0", model_source)
+
+    def test_model_marks_scail2_reference_prefix_before_patch_embedding(self) -> None:
+        model_source = (ROOT / "wanvideo" / "modules" / "model.py").read_text(encoding="utf-8")
+
+        self.assertIn("mark_scail2_prefix_history_channels(", model_source)
+        self.assertIn('prefix_frames=scail2_plan["prefix_frames"]', model_source)
+        self.assertIn('name="SCAIL-2 main latent"', model_source)
 
 
 if __name__ == "__main__":
