@@ -37,6 +37,13 @@ class WanVideoEncodeSocketNameTests(unittest.TestCase):
         self.assertIn('samples.get("scail_pose2_samples_disabled", False)', source)
         self.assertIn("samples = None", source)
 
+    def test_sampler_uses_scail_pose2_noise_mask_contract_helper(self) -> None:
+        source = (ROOT / "nodes_sampler.py").read_text(encoding="utf-8")
+
+        self.assertIn("resize_noise_mask_for_latents", source)
+        self.assertIn("noise_mask_contract.to_log_string()", source)
+        self.assertNotIn("mode='trilinear',\n                        align_corners=False\n                    ).repeat(1, noise.shape[0], 1, 1, 1)", source)
+
 
 if __name__ == "__main__":
     unittest.main()

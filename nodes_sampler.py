@@ -18,6 +18,7 @@ from .SCAIL.scail2_routing import (
     prepare_scail2_data,
     scail2_context_window_input,
 )
+from .scail_pose2_mask_contract import resize_noise_mask_for_latents
 from .enhance_a_video.globals import set_enhance_weight, set_num_frames
 from .WanMove.trajectory import replace_feature
 from contextlib import nullcontext
@@ -750,17 +751,12 @@ class WanVideoSampler:
                     original_image = samples.get("original_image", None)
                     if original_image is None:
                         original_image = input_samples
-                    if len(noise_mask.shape) == 4:
-                        noise_mask = noise_mask.squeeze(1)
-                    if noise_mask.shape[0] < noise.shape[1]:
-                        noise_mask = noise_mask.repeat(noise.shape[1] // noise_mask.shape[0], 1, 1)
-
-                    noise_mask = torch.nn.functional.interpolate(
-                        noise_mask.unsqueeze(0).unsqueeze(0),  # Add batch and channel dims [1,1,T,H,W]
-                        size=(noise.shape[1], noise.shape[2], noise.shape[3]),
-                        mode='trilinear',
-                        align_corners=False
-                    ).repeat(1, noise.shape[0], 1, 1, 1)
+                    noise_mask, noise_mask_contract = resize_noise_mask_for_latents(
+                        noise_mask,
+                        latent_shape=(noise.shape[1], noise.shape[2], noise.shape[3]),
+                        channel_count=noise.shape[0],
+                    )
+                    log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
 
         # extra latents (Pusa) and 5b
         latents_to_insert = add_index = noise_multipliers = None
@@ -2363,18 +2359,14 @@ class WanVideoSampler:
                                 # diff diff prep
                                 noise_mask = samples.get("noise_mask", None)
                                 if noise_mask is not None:
-                                    if len(noise_mask.shape) == 4:
-                                        noise_mask = noise_mask.squeeze(1)
-                                    if noise_mask.shape[0] < noise.shape[1]:
-                                        noise_mask = noise_mask.repeat(noise.shape[1] // noise_mask.shape[0], 1, 1)
-                                    else:
-                                        noise_mask = noise_mask[start_latent:end_latent]
-                                    noise_mask = torch.nn.functional.interpolate(
-                                        noise_mask.unsqueeze(0).unsqueeze(0),  # Add batch and channel dims [1,1,T,H,W]
-                                        size=(noise.shape[1], noise.shape[2], noise.shape[3]),
-                                        mode='trilinear',
-                                        align_corners=False
-                                    ).repeat(1, noise.shape[0], 1, 1, 1)
+                                    noise_mask, noise_mask_contract = resize_noise_mask_for_latents(
+                                        noise_mask,
+                                        latent_shape=(noise.shape[1], noise.shape[2], noise.shape[3]),
+                                        channel_count=noise.shape[0],
+                                        start_latent=start_latent,
+                                        end_latent=end_latent,
+                                    )
+                                    log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
 
                                     thresholds = torch.arange(len(timesteps), dtype=original_image.dtype) / len(timesteps)
                                     thresholds = thresholds.reshape(-1, 1, 1, 1, 1).to(device)
