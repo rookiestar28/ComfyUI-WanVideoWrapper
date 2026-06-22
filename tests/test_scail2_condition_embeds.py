@@ -350,6 +350,51 @@ def real_condition_video_leak_payload(*, replace_flag: bool = True):
     }
 
 
+def real_condition_video_structure_payload():
+    import torch
+
+    driving_mask_indices = torch.zeros((5, 8, 8), dtype=torch.int8)
+    driving_mask_indices[:, :, :4] = 3
+    pose_video = torch.ones((5, 8, 8, 3), dtype=torch.float32)
+    pose_video[:, :, :2] = 0.05
+    pose_video[:, :, 2:4] = 0.95
+    condition = {
+        "ref_image": torch.ones((1, 8, 8, 3), dtype=torch.float32),
+        "ref_mask_indices": torch.zeros((1, 8, 8), dtype=torch.int8),
+        "pose_video": pose_video,
+        "driving_mask_indices": driving_mask_indices,
+        "additional_references": [],
+    }
+    return {
+        "kind": "wanvideo_scail2_condition_adapter",
+        "version": 1,
+        "schema": {
+            "name": "scail_pose2.wanvideo_scail2_payload",
+            "version": 1,
+            "native_wrapper": {
+                "embeds_key": "scail2_embeds",
+            },
+        },
+        "condition": condition,
+        "mode": "replacement",
+        "replace_flag": True,
+        "dimensions": {
+            "width": 8,
+            "height": 8,
+            "num_frames": 5,
+        },
+        "source": {
+            "source_kind": "unit_test",
+        },
+        "runtime_masks": {
+            "reference": real_runtime_mask(1),
+            "driving": real_runtime_mask(2),
+            "additional_references": [],
+        },
+        "additional_references": [],
+    }
+
+
 class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
     def test_node_contract_is_registered(self) -> None:
         module = import_scail_nodes()
@@ -519,6 +564,28 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertLess(float(subject_region[1].max().item()), -0.9)
         self.assertGreater(float(subject_region[2].min().item()), 0.9)
         self.assertGreater(float(background_region[0].min().item()), 0.9)
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
+    def test_replacement_mode_preserves_neutral_subject_structure(self) -> None:
+        module = import_scail_nodes_with_real_torch()
+        vae = RecordingVAE()
+
+        module.WanVideoAddSCAIL2ConditionEmbeds().add(
+            {
+                "target_shape": (16, 2, 1, 1),
+                "num_frames": 5,
+            },
+            real_condition_video_structure_payload(),
+            vae,
+        )
+
+        encoded_pose_input = vae.encode_calls[1]["image"]
+        subject_column_left = encoded_pose_input[:, :, :, 0]
+        subject_column_right = encoded_pose_input[:, :, :, 1]
+        subject_structure_contrast = (
+            subject_column_left - subject_column_right
+        ).abs().mean()
+        self.assertGreater(float(subject_structure_contrast.item()), 0.05)
 
     @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
     def test_animation_mode_does_not_sanitize_condition_video(self) -> None:

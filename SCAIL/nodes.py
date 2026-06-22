@@ -30,6 +30,8 @@ SEMANTIC_CONDITION_COLORS = (
     (0.0, 1.0, 1.0),
 )
 REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS = 4
+REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH = 0.35
+REPLACEMENT_CONDITION_VIDEO_STRUCTURE_GROW_PIXELS = 1
 
 
 def _field(value, name, default=None):
@@ -218,6 +220,35 @@ def _semantic_condition_video_from_indices(indices, *, dtype):
     return color_table[lookup].contiguous()
 
 
+def _neutral_subject_structure_from_video(image, subject_alpha):
+    alpha_cthw = subject_alpha.permute(0, 3, 1, 2).contiguous().clamp(0.0, 1.0)
+    luma = (
+        image[..., 0].float() * 0.299
+        + image[..., 1].float() * 0.587
+        + image[..., 2].float() * 0.114
+    ).unsqueeze(1)
+    dx = torch.zeros_like(luma)
+    dy = torch.zeros_like(luma)
+    dx[..., :, 1:] = (luma[..., :, 1:] - luma[..., :, :-1]).abs()
+    dy[..., 1:, :] = (luma[..., 1:, :] - luma[..., :-1, :]).abs()
+    structure = (dx + dy) * alpha_cthw
+    grow = REPLACEMENT_CONDITION_VIDEO_STRUCTURE_GROW_PIXELS
+    if grow > 0:
+        structure = F.max_pool2d(
+            structure,
+            kernel_size=grow * 2 + 1,
+            stride=1,
+            padding=grow,
+        )
+    peak = structure.flatten(1).amax(dim=1).view(-1, 1, 1, 1)
+    structure = torch.where(
+        peak > 1e-6,
+        structure / peak.clamp(min=1e-6),
+        structure,
+    )
+    return structure.permute(0, 2, 3, 1).to(dtype=image.dtype).contiguous().clamp(0.0, 1.0)
+
+
 def _prepare_condition_video(image, mask_indices, *, replace_flag, height, width):
     if image is None:
         raise ValueError("pose is required for SCAIL-2 condition embeds")
@@ -253,12 +284,24 @@ def _prepare_condition_video(image, mask_indices, *, replace_flag, height, width
         indices,
         dtype=resized.dtype,
     )
+    neutral_structure = _neutral_subject_structure_from_video(resized, raw_alpha)
+    if REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH > 0.0:
+        neutral_condition = (
+            neutral_condition
+            + (1.0 - neutral_condition)
+            * neutral_structure
+            * REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH
+        ).clamp(0.0, 1.0)
     alpha = alpha.to(device=resized.device, dtype=resized.dtype)
     neutralized = resized * (1.0 - alpha) + neutral_condition * alpha
     log.info(
-        "SCAIL-2 replacement condition video neutralized: subject_ratio=%.6f grow_pixels=%s",
+        (
+            "SCAIL-2 replacement condition video neutralized: "
+            "subject_ratio=%.6f grow_pixels=%s structure_strength=%.3f"
+        ),
         float(alpha.float().mean().item()),
         REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS,
+        REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH,
     )
     return neutralized.clamp(0.0, 1.0)
 
