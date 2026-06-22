@@ -49,6 +49,8 @@ class SamplesInitializationContract:
     mask_aware: bool
     subject_ratio: float
     preserve_ratio: float
+    subject_source: str
+    preserve_source: str
 
     def to_log_string(self) -> str:
         return (
@@ -56,6 +58,8 @@ class SamplesInitializationContract:
             f"add_noise_to_samples={self.add_noise_to_samples} "
             f"scail_pose2_replacement={self.scail_pose2_replacement} "
             f"mask_aware={self.mask_aware} "
+            f"subject_source={self.subject_source} "
+            f"preserve_source={self.preserve_source} "
             f"subject_ratio={self.subject_ratio:.6f} "
             f"preserve_ratio={self.preserve_ratio:.6f}"
         )
@@ -246,8 +250,10 @@ def apply_samples_to_noise(
     if add_noise_to_samples:
         scale = _noise_timestep_scale(timestep, noise)
         initialized_from_samples = noise * scale + (1.0 - scale) * input_samples
+        sample_source = "noised_samples"
     else:
         initialized_from_samples = input_samples
+        sample_source = "samples"
 
     if scail_pose2_replacement and noise_mask is not None:
         subject_mask = _mask_like_noise(noise_mask, noise)
@@ -260,6 +266,8 @@ def apply_samples_to_noise(
             mask_aware=True,
             subject_ratio=subject_ratio,
             preserve_ratio=1.0 - subject_ratio,
+            subject_source="random_noise",
+            preserve_source=sample_source,
         )
 
     return initialized_from_samples, SamplesInitializationContract(
@@ -268,6 +276,8 @@ def apply_samples_to_noise(
         mask_aware=False,
         subject_ratio=0.0,
         preserve_ratio=1.0,
+        subject_source=sample_source,
+        preserve_source=sample_source,
     )
 
 

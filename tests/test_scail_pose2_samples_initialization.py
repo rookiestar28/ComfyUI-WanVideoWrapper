@@ -46,6 +46,10 @@ class ScailPose2SamplesInitializationTests(unittest.TestCase):
 
         self.assertTrue(contract.mask_aware)
         self.assertTrue(contract.scail_pose2_replacement)
+        self.assertEqual("random_noise", contract.subject_source)
+        self.assertEqual("noised_samples", contract.preserve_source)
+        self.assertIn("subject_source=random_noise", contract.to_log_string())
+        self.assertIn("preserve_source=noised_samples", contract.to_log_string())
         self.assertAlmostEqual(0.25, contract.subject_ratio)
         self.assertEqual(10.0, float(initialized[0, 0, 0, 0].item()))
         self.assertEqual(55.0, float(initialized[0, 0, 0, 1].item()))
@@ -76,6 +80,8 @@ class ScailPose2SamplesInitializationTests(unittest.TestCase):
         )
 
         self.assertTrue(contract.mask_aware)
+        self.assertEqual("random_noise", contract.subject_source)
+        self.assertEqual("samples", contract.preserve_source)
         self.assertEqual(7.0, float(initialized[0, 0, 0, 1].item()))
         self.assertEqual(99.0, float(initialized[0, 0, 0, 0].item()))
         self.assertEqual(99.0, float(initialized[0, 0, 1, 1].item()))
@@ -100,6 +106,8 @@ class ScailPose2SamplesInitializationTests(unittest.TestCase):
         )
 
         self.assertFalse(contract.mask_aware)
+        self.assertEqual("noised_samples", contract.subject_source)
+        self.assertEqual("noised_samples", contract.preserve_source)
         self.assertEqual(55.0, float(initialized[0, 0, 0, 0].item()))
         self.assertEqual(55.0, float(initialized[0, 0, 1, 1].item()))
 
