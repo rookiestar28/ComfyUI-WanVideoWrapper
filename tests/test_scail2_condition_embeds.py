@@ -83,23 +83,42 @@ def install_comfy_stub_with_real_torch() -> None:
 
 
 def import_scail_nodes():
+    preserved_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == "torch"
+        or name.startswith("torch.")
+        or name == "comfy"
+        or name.startswith("comfy.")
+    }
     install_comfy_stub()
     module_name = "wan_scail_nodes_under_test"
     sys.modules.pop(module_name, None)
-    spec = importlib.util.spec_from_file_location(
-        module_name,
-        ROOT / "SCAIL" / "nodes.py",
-    )
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+    try:
+        spec = importlib.util.spec_from_file_location(
+            module_name,
+            ROOT / "SCAIL" / "nodes.py",
+        )
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        for name in tuple(sys.modules):
+            if (
+                name == "torch"
+                or name.startswith("torch.")
+                or name == "comfy"
+                or name.startswith("comfy.")
+            ):
+                sys.modules.pop(name, None)
+        sys.modules.update(preserved_modules)
 
 
 def import_scail_nodes_with_real_torch():
-    for name in ("torch", "torch.nn", "torch.nn.functional"):
+    for name in ("comfy", "comfy.model_management"):
         sys.modules.pop(name, None)
     import torch  # noqa: F401
 
@@ -242,6 +261,8 @@ def real_replacement_payload():
 
     ref_mask_indices = torch.full((1, 8, 8), -1, dtype=torch.int8)
     ref_mask_indices[:, :, :4] = 3
+    driving_mask_indices = torch.zeros((5, 8, 8), dtype=torch.int8)
+    driving_mask_indices[:, :, :4] = 3
     add_mask_indices = torch.full((1, 8, 8), -1, dtype=torch.int8)
     add_mask_indices[:, :4, :] = 3
     additional_ref = {
@@ -252,6 +273,7 @@ def real_replacement_payload():
         "ref_image": torch.ones((1, 8, 8, 3), dtype=torch.float32),
         "ref_mask_indices": ref_mask_indices,
         "pose_video": torch.ones((5, 8, 8, 3), dtype=torch.float32),
+        "driving_mask_indices": driving_mask_indices,
         "additional_references": [additional_ref],
     }
     return {
@@ -281,6 +303,50 @@ def real_replacement_payload():
             "additional_references": [real_runtime_mask(1)],
         },
         "additional_references": [additional_ref],
+    }
+
+
+def real_condition_video_leak_payload(*, replace_flag: bool = True):
+    import torch
+
+    driving_mask_indices = torch.zeros((5, 8, 8), dtype=torch.int8)
+    driving_mask_indices[:, :, :4] = 3
+    pose_video = torch.ones((5, 8, 8, 3), dtype=torch.float32)
+    pose_video[:, :, :4] = 0.0
+    condition = {
+        "ref_image": torch.ones((1, 8, 8, 3), dtype=torch.float32),
+        "ref_mask_indices": torch.zeros((1, 8, 8), dtype=torch.int8),
+        "pose_video": pose_video,
+        "driving_mask_indices": driving_mask_indices,
+        "additional_references": [],
+    }
+    return {
+        "kind": "wanvideo_scail2_condition_adapter",
+        "version": 1,
+        "schema": {
+            "name": "scail_pose2.wanvideo_scail2_payload",
+            "version": 1,
+            "native_wrapper": {
+                "embeds_key": "scail2_embeds",
+            },
+        },
+        "condition": condition,
+        "mode": "replacement" if replace_flag else "animation",
+        "replace_flag": replace_flag,
+        "dimensions": {
+            "width": 8,
+            "height": 8,
+            "num_frames": 5,
+        },
+        "source": {
+            "source_kind": "unit_test",
+        },
+        "runtime_masks": {
+            "reference": real_runtime_mask(1),
+            "driving": real_runtime_mask(2),
+            "additional_references": [],
+        },
+        "additional_references": [],
     }
 
 
@@ -429,6 +495,40 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertEqual(-1.0, float(primary_ref[0, 0, 0, 7].item()))
         self.assertEqual(1.0, float(additional_ref[0, 0, 0, 0].item()))
         self.assertEqual(-1.0, float(additional_ref[0, 0, 7, 0].item()))
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
+    def test_replacement_mode_sanitizes_condition_video_before_pose_encode(self) -> None:
+        module = import_scail_nodes_with_real_torch()
+        vae = RecordingVAE()
+
+        module.WanVideoAddSCAIL2ConditionEmbeds().add(
+            {
+                "target_shape": (16, 2, 1, 1),
+                "num_frames": 5,
+            },
+            real_condition_video_leak_payload(replace_flag=True),
+            vae,
+        )
+
+        encoded_pose_input = vae.encode_calls[1]["image"]
+        self.assertGreater(float(encoded_pose_input[:, :, :, :2].min().item()), 0.9)
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
+    def test_animation_mode_does_not_sanitize_condition_video(self) -> None:
+        module = import_scail_nodes_with_real_torch()
+        vae = RecordingVAE()
+
+        module.WanVideoAddSCAIL2ConditionEmbeds().add(
+            {
+                "target_shape": (16, 2, 1, 1),
+                "num_frames": 5,
+            },
+            real_condition_video_leak_payload(replace_flag=False),
+            vae,
+        )
+
+        encoded_pose_input = vae.encode_calls[1]["image"]
+        self.assertLess(float(encoded_pose_input[:, :, :, :2].min().item()), -0.9)
 
     def test_rejects_invalid_payload(self) -> None:
         module = import_scail_nodes()

@@ -20,6 +20,7 @@ SCAIL2_STRENGTH_KEYS = (
     "condition_video",
     "driving_mask",
 )
+REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS = 8
 
 
 def _field(value, name, default=None):
@@ -150,6 +151,88 @@ def _prepare_reference_image(image, mask_indices, *, replace_flag, height, width
             alpha = alpha[:1].expand(int(resized.shape[0]), -1, -1, -1)
         resized = resized * alpha
     return resized
+
+
+def _mask_indices_to_replacement_subject_alpha(
+    mask_indices,
+    *,
+    frame_count,
+    height,
+    width,
+    name,
+):
+    if mask_indices is None:
+        return None
+    indices = torch.as_tensor(mask_indices, device=device)
+    if indices.ndim == 2:
+        indices = indices.unsqueeze(0)
+    if indices.ndim != 3:
+        raise ValueError(f"{name} mask indices must have shape [frames, height, width]")
+    if int(indices.shape[0]) <= 0 or int(indices.shape[1]) <= 0 or int(indices.shape[2]) <= 0:
+        raise ValueError(f"{name} mask indices must be non-empty")
+
+    # Replacement colored masks use white index 0 as background/preserve area.
+    subject = torch.logical_and(indices != BACKGROUND_INDEX, indices != 0)
+    alpha = subject.to(dtype=torch.float32).unsqueeze(1)
+    if int(alpha.shape[0]) == 1 and int(frame_count) != 1:
+        alpha = alpha.expand(int(frame_count), -1, -1, -1)
+    elif int(alpha.shape[0]) != int(frame_count):
+        alpha = F.interpolate(
+            alpha.unsqueeze(0),
+            size=(int(frame_count), int(height), int(width)),
+            mode="nearest",
+        ).squeeze(0)
+    if int(alpha.shape[-2]) != int(height) or int(alpha.shape[-1]) != int(width):
+        alpha = F.interpolate(alpha, size=(int(height), int(width)), mode="nearest")
+    return alpha.permute(0, 2, 3, 1).contiguous().clamp(0.0, 1.0)
+
+
+def _frame_background_mean(image, subject_alpha):
+    background = 1.0 - subject_alpha
+    denom = background.sum(dim=(1, 2), keepdim=True).clamp(min=1.0)
+    mean = (image * background).sum(dim=(1, 2), keepdim=True) / denom
+    full_mean = image.mean(dim=(1, 2), keepdim=True)
+    has_background = (background.sum(dim=(1, 2), keepdim=True) > 0).to(dtype=torch.bool)
+    return torch.where(has_background, mean, full_mean).expand_as(image)
+
+
+def _prepare_condition_video(image, mask_indices, *, replace_flag, height, width):
+    if image is None:
+        raise ValueError("pose is required for SCAIL-2 condition embeds")
+    resized = _resize_bhwc_spatial(image, height, width)
+    if not replace_flag:
+        return resized
+    raw_alpha = _mask_indices_to_replacement_subject_alpha(
+        mask_indices,
+        frame_count=int(resized.shape[0]),
+        height=height,
+        width=width,
+        name="driving",
+    )
+    if raw_alpha is None or not bool((raw_alpha > 0).any().item()):
+        return resized
+    alpha_cthw = raw_alpha.permute(0, 3, 1, 2)
+    grow = REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS
+    if grow > 0:
+        alpha_cthw = F.max_pool2d(
+            alpha_cthw,
+            kernel_size=grow * 2 + 1,
+            stride=1,
+            padding=grow,
+        )
+    alpha = alpha_cthw.permute(0, 2, 3, 1).contiguous().clamp(0.0, 1.0)
+    fill = _frame_background_mean(
+        resized,
+        raw_alpha.to(device=resized.device, dtype=resized.dtype),
+    )
+    alpha = alpha.to(device=resized.device, dtype=resized.dtype)
+    sanitized = resized * (1.0 - alpha) + fill * alpha
+    log.info(
+        "SCAIL-2 replacement condition video sanitized: subject_ratio=%.6f grow_pixels=%s",
+        float(alpha.float().mean().item()),
+        REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS,
+    )
+    return sanitized.clamp(0.0, 1.0)
 
 
 def _encode_image_batch(vae, image, *, name, spatial_size=None):
@@ -336,7 +419,13 @@ class WanVideoAddSCAIL2ConditionEmbeds:
         )
         pose_latent = _encode_image_batch(
             vae,
-            _field(source_condition, "pose_video"),
+            _prepare_condition_video(
+                _field(source_condition, "pose_video"),
+                _field(source_condition, "driving_mask_indices"),
+                replace_flag=replace_flag,
+                height=height,
+                width=width,
+            ),
             name="pose",
             spatial_size=(height // 2, width // 2),
         )
