@@ -542,7 +542,7 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         self.assertEqual(-1.0, float(additional_ref[0, 0, 7, 0].item()))
 
     @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
-    def test_replacement_mode_neutralizes_condition_video_with_semantic_structure(
+    def test_replacement_mode_preserves_raw_condition_video_before_pose_encode(
         self,
     ) -> None:
         module = import_scail_nodes_with_real_torch()
@@ -562,11 +562,11 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         background_region = encoded_pose_input[:, :, :, 2:]
         self.assertLess(float(subject_region[0].max().item()), -0.9)
         self.assertLess(float(subject_region[1].max().item()), -0.9)
-        self.assertGreater(float(subject_region[2].min().item()), 0.9)
+        self.assertLess(float(subject_region[2].max().item()), -0.9)
         self.assertGreater(float(background_region[0].min().item()), 0.9)
 
     @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
-    def test_replacement_mode_preserves_neutral_subject_structure(self) -> None:
+    def test_replacement_mode_preserves_raw_subject_rgb_gradient(self) -> None:
         module = import_scail_nodes_with_real_torch()
         vae = RecordingVAE()
 
@@ -582,10 +582,8 @@ class WanVideoAddSCAIL2ConditionEmbedsTests(unittest.TestCase):
         encoded_pose_input = vae.encode_calls[1]["image"]
         subject_column_left = encoded_pose_input[:, :, :, 0]
         subject_column_right = encoded_pose_input[:, :, :, 1]
-        subject_structure_contrast = (
-            subject_column_left - subject_column_right
-        ).abs().mean()
-        self.assertGreater(float(subject_structure_contrast.item()), 0.05)
+        self.assertLess(float(subject_column_left.max().item()), -0.85)
+        self.assertGreater(float(subject_column_right.min().item()), 0.85)
 
     @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
     def test_animation_mode_does_not_sanitize_condition_video(self) -> None:

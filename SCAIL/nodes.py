@@ -20,18 +20,6 @@ SCAIL2_STRENGTH_KEYS = (
     "condition_video",
     "driving_mask",
 )
-SEMANTIC_CONDITION_COLORS = (
-    (1.0, 1.0, 1.0),
-    (1.0, 0.0, 0.0),
-    (0.0, 1.0, 0.0),
-    (0.0, 0.0, 1.0),
-    (1.0, 1.0, 0.0),
-    (1.0, 0.0, 1.0),
-    (0.0, 1.0, 1.0),
-)
-REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS = 4
-REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH = 0.35
-REPLACEMENT_CONDITION_VIDEO_STRUCTURE_GROW_PIXELS = 1
 
 
 def _field(value, name, default=None):
@@ -164,146 +152,10 @@ def _prepare_reference_image(image, mask_indices, *, replace_flag, height, width
     return resized
 
 
-def _normalized_replacement_indices(
-    mask_indices,
-    *,
-    frame_count,
-    height,
-    width,
-    name,
-    target_device,
-):
-    if mask_indices is None:
-        return None
-    if hasattr(mask_indices, "detach"):
-        indices = mask_indices.detach().to(target_device)
-    else:
-        indices = torch.as_tensor(mask_indices, device=target_device)
-    if indices.ndim == 2:
-        indices = indices.unsqueeze(0)
-    if indices.ndim != 3:
-        raise ValueError(f"{name} mask indices must have shape [frames, height, width]")
-    if int(indices.shape[0]) <= 0 or int(indices.shape[1]) <= 0 or int(indices.shape[2]) <= 0:
-        raise ValueError(f"{name} mask indices must be non-empty")
-    invalid = torch.logical_and(
-        indices != BACKGROUND_INDEX,
-        torch.logical_or(indices < 0, indices > 6),
-    )
-    if bool(invalid.any().item()):
-        raise ValueError(f"{name} mask indices must be background or 0..6")
-    if (
-        int(indices.shape[0]) != int(frame_count)
-        or int(indices.shape[1]) != int(height)
-        or int(indices.shape[2]) != int(width)
-    ):
-        indices = F.interpolate(
-            indices.to(dtype=torch.float32).unsqueeze(0).unsqueeze(0),
-            size=(int(frame_count), int(height), int(width)),
-            mode="nearest",
-        ).squeeze(0).squeeze(0).round()
-    return indices.to(dtype=torch.int64).contiguous()
-
-
-def _replacement_subject_alpha_from_indices(indices):
-    # Replacement colored masks use white index 0 as background/preserve area.
-    subject = torch.logical_and(indices != BACKGROUND_INDEX, indices != 0)
-    return subject.to(dtype=torch.float32).unsqueeze(-1).contiguous().clamp(0.0, 1.0)
-
-
-def _semantic_condition_video_from_indices(indices, *, dtype):
-    color_table = torch.tensor(
-        SEMANTIC_CONDITION_COLORS,
-        device=indices.device,
-        dtype=dtype,
-    )
-    lookup = indices.clamp(min=0, max=6).to(dtype=torch.long)
-    return color_table[lookup].contiguous()
-
-
-def _neutral_subject_structure_from_video(image, subject_alpha):
-    alpha_cthw = subject_alpha.permute(0, 3, 1, 2).contiguous().clamp(0.0, 1.0)
-    luma = (
-        image[..., 0].float() * 0.299
-        + image[..., 1].float() * 0.587
-        + image[..., 2].float() * 0.114
-    ).unsqueeze(1)
-    dx = torch.zeros_like(luma)
-    dy = torch.zeros_like(luma)
-    dx[..., :, 1:] = (luma[..., :, 1:] - luma[..., :, :-1]).abs()
-    dy[..., 1:, :] = (luma[..., 1:, :] - luma[..., :-1, :]).abs()
-    structure = (dx + dy) * alpha_cthw
-    grow = REPLACEMENT_CONDITION_VIDEO_STRUCTURE_GROW_PIXELS
-    if grow > 0:
-        structure = F.max_pool2d(
-            structure,
-            kernel_size=grow * 2 + 1,
-            stride=1,
-            padding=grow,
-        )
-    peak = structure.flatten(1).amax(dim=1).view(-1, 1, 1, 1)
-    structure = torch.where(
-        peak > 1e-6,
-        structure / peak.clamp(min=1e-6),
-        structure,
-    )
-    return structure.permute(0, 2, 3, 1).to(dtype=image.dtype).contiguous().clamp(0.0, 1.0)
-
-
 def _prepare_condition_video(image, mask_indices, *, replace_flag, height, width):
     if image is None:
         raise ValueError("pose is required for SCAIL-2 condition embeds")
-    resized = _resize_bhwc_spatial(image, height, width)
-    if not replace_flag:
-        return resized
-    if mask_indices is None:
-        return resized
-    indices = _normalized_replacement_indices(
-        mask_indices,
-        frame_count=int(resized.shape[0]),
-        height=height,
-        width=width,
-        name="driving",
-        target_device=resized.device,
-    )
-    if indices is None:
-        return resized
-    raw_alpha = _replacement_subject_alpha_from_indices(indices)
-    if raw_alpha is None or not bool((raw_alpha > 0).any().item()):
-        return resized
-    alpha_cthw = raw_alpha.permute(0, 3, 1, 2)
-    grow = REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS
-    if grow > 0:
-        alpha_cthw = F.max_pool2d(
-            alpha_cthw,
-            kernel_size=grow * 2 + 1,
-            stride=1,
-            padding=grow,
-        )
-    alpha = alpha_cthw.permute(0, 2, 3, 1).contiguous().clamp(0.0, 1.0)
-    neutral_condition = _semantic_condition_video_from_indices(
-        indices,
-        dtype=resized.dtype,
-    )
-    neutral_structure = _neutral_subject_structure_from_video(resized, raw_alpha)
-    if REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH > 0.0:
-        neutral_condition = (
-            neutral_condition
-            + (1.0 - neutral_condition)
-            * neutral_structure
-            * REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH
-        ).clamp(0.0, 1.0)
-    alpha = alpha.to(device=resized.device, dtype=resized.dtype)
-    neutralized = resized * (1.0 - alpha) + neutral_condition * alpha
-    log.info(
-        (
-            "SCAIL-2 replacement condition video neutralized: "
-            "subject_ratio=%.6f grow_pixels=%s structure_strength=%.3f"
-        ),
-        float(alpha.float().mean().item()),
-        REPLACEMENT_CONDITION_VIDEO_GROW_PIXELS,
-        REPLACEMENT_CONDITION_VIDEO_STRUCTURE_STRENGTH,
-    )
-    return neutralized.clamp(0.0, 1.0)
+    return _resize_bhwc_spatial(image, height, width)
 
 
 def _encode_image_batch(vae, image, *, name, spatial_size=None):
