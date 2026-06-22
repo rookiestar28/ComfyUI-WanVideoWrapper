@@ -45,6 +45,8 @@ class WanVideoEncodeSocketNameTests(unittest.TestCase):
         self.assertGreaterEqual(source.count("apply_samples_to_noise("), 2)
         self.assertIn("latent_grow_pixels=1", source)
         self.assertGreaterEqual(source.count("latent_grow_pixels=1"), 2)
+        self.assertIn("latent_temporal_grow_frames=1", source)
+        self.assertGreaterEqual(source.count("latent_temporal_grow_frames=1"), 2)
         self.assertIn("noise_mask_contract.to_log_string()", source)
         self.assertIn("samples_init_contract.to_log_string()", source)
         self.assertNotIn("mode='trilinear',\n                        align_corners=False\n                    ).repeat(1, noise.shape[0], 1, 1, 1)", source)

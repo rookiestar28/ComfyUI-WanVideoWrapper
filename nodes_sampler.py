@@ -751,6 +751,7 @@ class WanVideoSampler:
                         latent_shape=(noise.shape[1], noise.shape[2], noise.shape[3]),
                         channel_count=noise.shape[0],
                         latent_grow_pixels=1,
+                        latent_temporal_grow_frames=1,
                     )
                     log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
 
@@ -2371,6 +2372,7 @@ class WanVideoSampler:
                                         end_latent=end_latent,
                                         source_latent_frame_count=input_samples.shape[1] if input_samples is not None else None,
                                         latent_grow_pixels=1,
+                                        latent_temporal_grow_frames=1,
                                     )
                                     log.info(f"WanVideoSampler: {noise_mask_contract.to_log_string()}")
 

@@ -137,6 +137,46 @@ class ScailPose2MaskContractTests(unittest.TestCase):
         self.assertEqual(9.0, float(latent_mask[0, 0, 0].sum().item()))
         self.assertEqual(9.0, float(latent_mask[0, 0, 1].sum().item()))
 
+    def test_replacement_temporal_grow_is_bounded_and_reported(self) -> None:
+        import torch
+
+        mask = torch.zeros((5, 1, 1), dtype=torch.float32)
+        mask[2, 0, 0] = 1.0
+        setattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "replacement")
+        setattr(mask, SCAIL_POSE2_MASK_ROLE_ATTR, SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE)
+
+        latent_mask, contract = resize_noise_mask_for_latents(
+            mask,
+            latent_shape=(5, 1, 1),
+            channel_count=1,
+            latent_grow_pixels=0,
+            latent_temporal_grow_frames=1,
+        )
+
+        self.assertEqual(1, contract.latent_temporal_grow_frames)
+        self.assertAlmostEqual(1.0 / 5.0, contract.pre_grow_subject_ratio)
+        self.assertAlmostEqual(3.0 / 5.0, contract.subject_ratio)
+        self.assertEqual([0.0, 1.0, 1.0, 1.0, 0.0], latent_mask[0, 0, :, 0, 0].tolist())
+        self.assertIn("latent_temporal_grow_frames=1", contract.to_log_string())
+
+    def test_temporal_grow_is_ignored_for_untagged_masks(self) -> None:
+        import torch
+
+        mask = torch.zeros((5, 1, 1), dtype=torch.float32)
+        mask[2, 0, 0] = 1.0
+
+        latent_mask, contract = resize_noise_mask_for_latents(
+            mask,
+            latent_shape=(5, 1, 1),
+            channel_count=1,
+            latent_grow_pixels=0,
+            latent_temporal_grow_frames=1,
+        )
+
+        self.assertFalse(contract.scail_pose2_replacement)
+        self.assertEqual(0, contract.latent_temporal_grow_frames)
+        self.assertEqual([0.0, 0.0, 1.0, 0.0, 0.0], latent_mask[0, 0, :, 0, 0].tolist())
+
 
 if __name__ == "__main__":
     unittest.main()

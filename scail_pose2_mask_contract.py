@@ -24,6 +24,7 @@ class NoiseMaskLatentContract:
     preserve_ratio: float
     pre_grow_subject_ratio: float
     latent_grow_pixels: int
+    latent_temporal_grow_frames: int
 
     def to_log_string(self) -> str:
         return (
@@ -36,6 +37,7 @@ class NoiseMaskLatentContract:
             f"scail_pose2_replacement={self.scail_pose2_replacement} "
             f"frame_policy={self.frame_policy} "
             f"latent_grow_pixels={self.latent_grow_pixels} "
+            f"latent_temporal_grow_frames={self.latent_temporal_grow_frames} "
             f"pre_grow_subject_ratio={self.pre_grow_subject_ratio:.6f} "
             f"subject_ratio={self.subject_ratio:.6f} "
             f"preserve_ratio={self.preserve_ratio:.6f}"
@@ -107,12 +109,14 @@ def resize_noise_mask_for_latents(
     end_latent: int | None = None,
     source_latent_frame_count: int | None = None,
     latent_grow_pixels: Any = 0,
+    latent_temporal_grow_frames: Any = 0,
 ) -> tuple[Any, NoiseMaskLatentContract]:
     """Resize a sampler `noise_mask` to `[1, C, T, H, W]` latent mask shape."""
 
     target_frames, target_height, target_width = _positive_latent_shape(latent_shape)
     channels = _positive_channel_count(channel_count)
     grow_pixels = _non_negative_grow_pixels(latent_grow_pixels)
+    temporal_grow_frames = _non_negative_grow_pixels(latent_temporal_grow_frames)
     original_shape = _shape_tuple(noise_mask)
     scail_pose2_replacement = is_scail_pose2_replacement_noise_mask(noise_mask)
     prepared = noise_mask
@@ -167,6 +171,8 @@ def resize_noise_mask_for_latents(
     pre_grow_subject_ratio = float(resized_3d.float().mean().item())
     if scail_pose2_replacement and grow_pixels > 0:
         resized_3d = _grow_spatial_binary_mask(resized_3d, grow_pixels)
+    if scail_pose2_replacement and temporal_grow_frames > 0:
+        resized_3d = _grow_temporal_binary_mask(resized_3d, temporal_grow_frames)
     resized = resized_3d.unsqueeze(0).unsqueeze(0)
     subject_ratio = float(resized.float().mean().item())
     contract = NoiseMaskLatentContract(
@@ -181,6 +187,9 @@ def resize_noise_mask_for_latents(
         preserve_ratio=1.0 - subject_ratio,
         pre_grow_subject_ratio=pre_grow_subject_ratio,
         latent_grow_pixels=grow_pixels if scail_pose2_replacement else 0,
+        latent_temporal_grow_frames=(
+            temporal_grow_frames if scail_pose2_replacement else 0
+        ),
     )
     return resized.repeat(1, channels, 1, 1, 1), contract
 
@@ -224,6 +233,20 @@ def _grow_spatial_binary_mask(mask: Any, grow_pixels: int) -> Any:
         kernel_size=(1, kernel, kernel),
         stride=1,
         padding=(0, grow_pixels, grow_pixels),
+    )
+    return (grown.squeeze(0).squeeze(0) >= 0.5).to(dtype=mask.dtype)
+
+
+def _grow_temporal_binary_mask(mask: Any, grow_frames: int) -> Any:
+    import torch.nn.functional as F
+
+    kernel = grow_frames * 2 + 1
+    view = mask.unsqueeze(0).unsqueeze(0).float()
+    grown = F.max_pool3d(
+        view,
+        kernel_size=(kernel, 1, 1),
+        stride=1,
+        padding=(grow_frames, 0, 0),
     )
     return (grown.squeeze(0).squeeze(0) >= 0.5).to(dtype=mask.dtype)
 
