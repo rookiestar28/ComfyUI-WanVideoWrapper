@@ -18,7 +18,11 @@ from .SCAIL.scail2_routing import (
     prepare_scail2_data,
     scail2_context_window_input,
 )
-from .scail_pose2_mask_contract import apply_samples_to_noise, resize_noise_mask_for_latents
+from .scail_pose2_mask_contract import (
+    align_samples_to_latent_window,
+    apply_samples_to_noise,
+    resize_noise_mask_for_latents,
+)
 from .enhance_a_video.globals import set_enhance_weight, set_num_frames
 from .WanMove.trajectory import replace_feature
 from contextlib import nullcontext
@@ -2347,16 +2351,22 @@ class WanVideoSampler:
 
                             if samples is not None:
                                 input_samples = samples["samples"]
+                                source_latent_frame_count = None
+                                mask_start_latent = None
+                                mask_end_latent = None
                                 if input_samples is not None:
                                     input_samples = input_samples.squeeze(0).to(noise)
-                                    # Check if we have enough frames in input_samples
-                                    # if latent_end_idx > input_samples.shape[1]:
-                                    #     # We need more frames than available - pad the input_samples at the end
-                                    #     pad_length = latent_end_idx - input_samples.shape[1]
-                                    #     last_frame = input_samples[:, -1:].repeat(1, pad_length, 1, 1)
-                                    #     input_samples = torch.cat([input_samples, last_frame], dim=1)
-                                    # input_samples = input_samples[:, latent_start_idx:latent_end_idx]
-                                    assert input_samples.shape[1] == noise.shape[1], f"Slice mismatch: {input_samples.shape[1]} vs {noise.shape[1]}"
+                                    input_samples, samples_window_contract = align_samples_to_latent_window(
+                                        input_samples,
+                                        target_frame_count=noise.shape[1],
+                                        start_latent=start_latent,
+                                        end_latent=end_latent,
+                                    )
+                                    log.info(f"WanVideoSampler: {samples_window_contract.to_log_string()}")
+                                    if samples_window_contract.frame_policy.startswith("slice_"):
+                                        source_latent_frame_count = samples_window_contract.source_latent_frame_count
+                                        mask_start_latent = start_latent
+                                        mask_end_latent = end_latent
 
                                 # diff diff prep
                                 noise_mask = samples.get("noise_mask", None)
@@ -2368,9 +2378,9 @@ class WanVideoSampler:
                                         noise_mask,
                                         latent_shape=(noise.shape[1], noise.shape[2], noise.shape[3]),
                                         channel_count=noise.shape[0],
-                                        start_latent=start_latent,
-                                        end_latent=end_latent,
-                                        source_latent_frame_count=input_samples.shape[1] if input_samples is not None else None,
+                                        start_latent=mask_start_latent,
+                                        end_latent=mask_end_latent,
+                                        source_latent_frame_count=source_latent_frame_count,
                                         latent_grow_pixels=1,
                                         latent_temporal_grow_frames=1,
                                     )

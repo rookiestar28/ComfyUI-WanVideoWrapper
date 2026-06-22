@@ -67,6 +67,29 @@ class SamplesInitializationContract:
         )
 
 
+@dataclass(frozen=True)
+class SamplesWindowAlignmentContract:
+    original_shape: tuple[int, ...]
+    output_shape: tuple[int, ...]
+    source_latent_frame_count: int
+    output_frame_count: int
+    frame_policy: str
+    start_latent: int | None
+    end_latent: int | None
+
+    def to_log_string(self) -> str:
+        return (
+            "samples_window_alignment_contract "
+            f"original_shape={self.original_shape} "
+            f"output_shape={self.output_shape} "
+            f"source_latent_frame_count={self.source_latent_frame_count} "
+            f"output_frame_count={self.output_frame_count} "
+            f"frame_policy={self.frame_policy} "
+            f"start_latent={self.start_latent} "
+            f"end_latent={self.end_latent}"
+        )
+
+
 def is_scail_pose2_replacement_noise_mask(noise_mask: Any) -> bool:
     return (
         getattr(noise_mask, SCAIL_POSE2_CONDITION_MODE_ATTR, None) == "replacement"
@@ -98,6 +121,58 @@ def _non_negative_grow_pixels(latent_grow_pixels: Any) -> int:
     if parsed < 0:
         raise ValueError("latent_grow_pixels must be non-negative")
     return parsed
+
+
+def align_samples_to_latent_window(
+    input_samples: Any,
+    *,
+    target_frame_count: Any,
+    start_latent: int | None = None,
+    end_latent: int | None = None,
+) -> tuple[Any, SamplesWindowAlignmentContract]:
+    """Align `[C,T,H,W]` samples to the active latent window."""
+
+    original_shape = _shape_tuple(input_samples)
+    if len(original_shape) != 4:
+        raise ValueError("input_samples must have shape [C,T,H,W]")
+    target_frames = int(target_frame_count)
+    if target_frames <= 0:
+        raise ValueError("target_frame_count must be positive")
+
+    source_frames = int(input_samples.shape[1])
+    output = input_samples
+    policy = "direct"
+    parsed_start = int(start_latent) if start_latent is not None else None
+    parsed_end = int(end_latent) if end_latent is not None else None
+
+    if parsed_start is not None and parsed_end is not None:
+        if source_frames == target_frames:
+            policy = f"direct_already_windowed_{parsed_start}_{parsed_end}"
+        else:
+            if parsed_start < 0 or parsed_end <= parsed_start or parsed_end > source_frames:
+                raise ValueError(
+                    "sample latent window is out of range, "
+                    f"got {parsed_start}:{parsed_end} for {source_frames} frames"
+                )
+            output = input_samples[:, parsed_start:parsed_end]
+            policy = f"slice_{parsed_start}_{parsed_end}"
+
+    if int(output.shape[1]) != target_frames:
+        raise ValueError(
+            "sample latent window frame count mismatch, "
+            f"got {int(output.shape[1])} frames for target {target_frames}"
+        )
+
+    contract = SamplesWindowAlignmentContract(
+        original_shape=original_shape,
+        output_shape=_shape_tuple(output),
+        source_latent_frame_count=source_frames,
+        output_frame_count=int(output.shape[1]),
+        frame_policy=policy,
+        start_latent=parsed_start,
+        end_latent=parsed_end,
+    )
+    return output, contract
 
 
 def resize_noise_mask_for_latents(
