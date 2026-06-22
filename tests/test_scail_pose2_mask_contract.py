@@ -14,7 +14,7 @@ from scail_pose2_mask_contract import (
 
 @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
 class ScailPose2MaskContractTests(unittest.TestCase):
-    def test_tagged_replacement_mask_uses_nearest_binary_latent_conversion(self) -> None:
+    def test_tagged_replacement_mask_uses_conservative_binary_latent_conversion(self) -> None:
         import torch
 
         mask = torch.tensor([[[0.0, 1.0], [0.49, 0.51]]], dtype=torch.float32)
@@ -30,7 +30,7 @@ class ScailPose2MaskContractTests(unittest.TestCase):
 
         self.assertTrue(is_scail_pose2_replacement_noise_mask(mask))
         self.assertEqual((1, 3, 1, 2, 2), tuple(latent_mask.shape))
-        self.assertEqual("nearest", contract.interpolation_mode)
+        self.assertEqual("conservative_area", contract.interpolation_mode)
         self.assertTrue(contract.scail_pose2_replacement)
         self.assertEqual(0.0, float(latent_mask[0, 0, 0, 0, 0].item()))
         self.assertEqual(1.0, float(latent_mask[0, 0, 0, 0, 1].item()))
@@ -40,6 +40,26 @@ class ScailPose2MaskContractTests(unittest.TestCase):
         self.assertAlmostEqual(0.5, contract.preserve_ratio)
         self.assertEqual(0, contract.latent_grow_pixels)
         self.assertAlmostEqual(0.5, contract.pre_grow_subject_ratio)
+
+    def test_thin_replacement_subject_survives_latent_downsampling(self) -> None:
+        import torch
+
+        mask = torch.zeros((1, 8, 8), dtype=torch.float32)
+        mask[:, :, 7] = 1.0
+        setattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "replacement")
+        setattr(mask, SCAIL_POSE2_MASK_ROLE_ATTR, SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE)
+
+        latent_mask, contract = resize_noise_mask_for_latents(
+            mask,
+            latent_shape=(1, 1, 1),
+            channel_count=1,
+            latent_grow_pixels=0,
+        )
+
+        self.assertEqual("conservative_area", contract.interpolation_mode)
+        self.assertEqual(1.0, float(latent_mask[0, 0, 0, 0, 0].item()))
+        self.assertAlmostEqual(1.0, contract.subject_ratio)
+        self.assertAlmostEqual(0.0, contract.preserve_ratio)
 
     def test_untagged_mask_keeps_trilinear_policy(self) -> None:
         import torch

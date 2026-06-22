@@ -152,7 +152,7 @@ def resize_noise_mask_for_latents(
         frame_policy = f"slice_{int(start_latent)}_{int(end_latent)}"
 
     prepared_shape = _shape_tuple(prepared)
-    interpolation_mode = "nearest" if scail_pose2_replacement else "trilinear"
+    interpolation_mode = "conservative_area" if scail_pose2_replacement else "trilinear"
     resized_3d = _resize_prepared_mask(
         prepared,
         target_frames=target_frames,
@@ -193,12 +193,13 @@ def _resize_prepared_mask(
 
     view = prepared.unsqueeze(0).unsqueeze(0)
     if scail_pose2_replacement:
+        binary = (prepared >= 0.5).to(dtype=prepared.dtype)
         resized = F.interpolate(
-            view,
+            binary.unsqueeze(0).unsqueeze(0),
             size=(target_frames, target_height, target_width),
-            mode="nearest",
+            mode="area",
         )
-        resized = (resized >= 0.5).to(dtype=prepared.dtype)
+        resized = (resized > 0.0).to(dtype=prepared.dtype)
     else:
         resized = F.interpolate(
             view,
