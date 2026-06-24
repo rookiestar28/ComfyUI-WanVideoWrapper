@@ -22,9 +22,11 @@ class Scail2ExampleWorkflowTests(unittest.TestCase):
         data = _load_example()
         nodes = {node["id"]: node for node in data["nodes"]}
         links = {link[0]: link for link in data["links"]}
-        class_types = {node.get("type") for node in data["nodes"]}
-
-        self.assertNotIn("SCAILPose2ReplacementConditionVideo", class_types)
+        replacement_condition_video = nodes[479]
+        self.assertEqual(
+            "SCAILPose2ReplacementConditionVideo",
+            replacement_condition_video["type"],
+        )
 
         condition = nodes[447]
         driving_input = next(
@@ -32,7 +34,14 @@ class Scail2ExampleWorkflowTests(unittest.TestCase):
         )
         driving_link = links[driving_input["link"]]
 
-        self.assertEqual([856, 478, 0, 447, 4, "IMAGE"], driving_link)
+        self.assertEqual([856, 479, 0, 447, 4, "IMAGE"], driving_link)
+        replacement_driving_input = next(
+            item
+            for item in replacement_condition_video["inputs"]
+            if item["name"] == "driving_video"
+        )
+        replacement_driving_link = links[replacement_driving_input["link"]]
+        self.assertEqual([854, 478, 0, 479, 0, "IMAGE"], replacement_driving_link)
         self.assertEqual("Get_driving_video", nodes[478]["title"])
 
     def test_replacement_example_wires_denoise_mask_to_encode_samples_path(self) -> None:
