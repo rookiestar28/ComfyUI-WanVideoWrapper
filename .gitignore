@@ -12,3 +12,5 @@ tools/
 convert_*
 *.pt
 *.pth
+.pla*/
+ref*/
