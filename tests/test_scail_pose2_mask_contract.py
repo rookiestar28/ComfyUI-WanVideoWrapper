@@ -5,11 +5,53 @@ import unittest
 
 from scail_pose2_mask_contract import (
     SCAIL_POSE2_CONDITION_MODE_ATTR,
+    SCAIL_POSE2_DISABLE_SAMPLES_ATTR,
+    SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR,
     SCAIL_POSE2_MASK_ROLE_ATTR,
     SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE,
+    build_disabled_samples_payload,
     is_scail_pose2_replacement_noise_mask,
     resize_noise_mask_for_latents,
+    samples_payload_is_disabled,
+    scail_pose2_mask_disables_samples,
 )
+
+
+class _DummyMask:
+    pass
+
+
+class ScailPose2SamplesDisableContractTests(unittest.TestCase):
+    def test_non_replacement_mask_metadata_builds_disabled_samples_payload(self) -> None:
+        mask = _DummyMask()
+        setattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_ATTR, True)
+        setattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR, "non_replacement_mode")
+        setattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "animation")
+
+        payload = build_disabled_samples_payload(mask)
+
+        self.assertTrue(scail_pose2_mask_disables_samples(mask))
+        self.assertTrue(samples_payload_is_disabled(payload))
+        self.assertIsNone(payload["samples"])
+        self.assertIsNone(payload["noise_mask"])
+        self.assertTrue(payload["scail_pose2_samples_disabled"])
+        self.assertEqual("animation", payload["scail_pose2_condition_mode"])
+        self.assertEqual("non_replacement_mode", payload["scail_pose2_disable_reason"])
+
+    def test_replacement_and_generic_payloads_are_not_disabled(self) -> None:
+        replacement_mask = _DummyMask()
+        setattr(replacement_mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "replacement")
+        setattr(
+            replacement_mask,
+            SCAIL_POSE2_MASK_ROLE_ATTR,
+            SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE,
+        )
+        generic_mask = _DummyMask()
+
+        self.assertFalse(scail_pose2_mask_disables_samples(replacement_mask))
+        self.assertFalse(scail_pose2_mask_disables_samples(generic_mask))
+        self.assertFalse(samples_payload_is_disabled({"samples": object()}))
+        self.assertFalse(samples_payload_is_disabled(None))
 
 
 @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")

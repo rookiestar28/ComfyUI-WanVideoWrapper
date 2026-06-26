@@ -9,6 +9,13 @@ from typing import Any
 SCAIL_POSE2_CONDITION_MODE_ATTR = "scail_pose2_condition_mode"
 SCAIL_POSE2_MASK_ROLE_ATTR = "scail_pose2_mask_role"
 SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE = "replacement_denoise_mask"
+SCAIL_POSE2_DISABLE_SAMPLES_ATTR = "scail_pose2_disable_samples"
+SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR = "scail_pose2_disable_samples_reason"
+SCAIL_POSE2_SAMPLES_DISABLED_KEY = "scail_pose2_samples_disabled"
+SCAIL_POSE2_DISABLE_REASON_KEY = "scail_pose2_disable_reason"
+SCAIL_POSE2_CONDITION_MODE_KEY = "scail_pose2_condition_mode"
+SCAIL_POSE2_DISABLED_REASON_UNSPECIFIED = "unspecified"
+SCAIL_POSE2_CONDITION_MODE_UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -95,6 +102,43 @@ def is_scail_pose2_replacement_noise_mask(noise_mask: Any) -> bool:
         getattr(noise_mask, SCAIL_POSE2_CONDITION_MODE_ATTR, None) == "replacement"
         and getattr(noise_mask, SCAIL_POSE2_MASK_ROLE_ATTR, None)
         == SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE
+    )
+
+
+def scail_pose2_mask_disables_samples(mask: Any) -> bool:
+    """Return whether SCAIL-Pose2 metadata disables the samples path."""
+
+    return bool(getattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_ATTR, False))
+
+
+def build_disabled_samples_payload(mask: Any) -> dict[str, Any]:
+    """Build a LATENT payload that downstream samplers intentionally ignore."""
+
+    reason = getattr(
+        mask,
+        SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR,
+        SCAIL_POSE2_DISABLED_REASON_UNSPECIFIED,
+    )
+    condition_mode = getattr(
+        mask,
+        SCAIL_POSE2_CONDITION_MODE_ATTR,
+        SCAIL_POSE2_CONDITION_MODE_UNKNOWN,
+    )
+    return {
+        "samples": None,
+        "noise_mask": None,
+        SCAIL_POSE2_SAMPLES_DISABLED_KEY: True,
+        SCAIL_POSE2_DISABLE_REASON_KEY: reason,
+        SCAIL_POSE2_CONDITION_MODE_KEY: condition_mode,
+    }
+
+
+def samples_payload_is_disabled(samples: Any) -> bool:
+    """Return whether a LATENT samples payload is explicitly disabled."""
+
+    return bool(
+        isinstance(samples, dict)
+        and samples.get(SCAIL_POSE2_SAMPLES_DISABLED_KEY, False)
     )
 
 
