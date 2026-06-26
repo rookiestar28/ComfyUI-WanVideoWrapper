@@ -10,6 +10,7 @@ logs/
 tools/
 .vscode/
 .venv/
+.sessions/
 convert_*
 *.pt
 *.pth

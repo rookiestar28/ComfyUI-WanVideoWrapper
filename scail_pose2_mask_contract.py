@@ -97,6 +97,15 @@ class SamplesWindowAlignmentContract:
         )
 
 
+@dataclass(frozen=True)
+class DisabledSamplesPayloadContext:
+    condition_mode: str
+    reason: str
+
+    def to_log_fragment(self) -> str:
+        return f"condition_mode={self.condition_mode} reason={self.reason}"
+
+
 def is_scail_pose2_replacement_noise_mask(noise_mask: Any) -> bool:
     return (
         getattr(noise_mask, SCAIL_POSE2_CONDITION_MODE_ATTR, None) == "replacement"
@@ -140,6 +149,40 @@ def samples_payload_is_disabled(samples: Any) -> bool:
         isinstance(samples, dict)
         and samples.get(SCAIL_POSE2_SAMPLES_DISABLED_KEY, False)
     )
+
+
+def disabled_samples_log_context(
+    samples: Any,
+) -> DisabledSamplesPayloadContext | None:
+    """Return public-safe log context for an intentionally disabled samples path."""
+
+    if not samples_payload_is_disabled(samples):
+        return None
+    return DisabledSamplesPayloadContext(
+        condition_mode=str(
+            samples.get(
+                SCAIL_POSE2_CONDITION_MODE_KEY,
+                SCAIL_POSE2_CONDITION_MODE_UNKNOWN,
+            )
+        ),
+        reason=str(
+            samples.get(
+                SCAIL_POSE2_DISABLE_REASON_KEY,
+                SCAIL_POSE2_DISABLED_REASON_UNSPECIFIED,
+            )
+        ),
+    )
+
+
+def normalize_samples_payload_for_sampler(
+    samples: Any,
+) -> tuple[Any | None, DisabledSamplesPayloadContext | None]:
+    """Normalize the sampler input before any vid2vid samples branch runs."""
+
+    context = disabled_samples_log_context(samples)
+    if context is not None:
+        return None, context
+    return samples, None
 
 
 def _shape_tuple(value: Any) -> tuple[int, ...]:

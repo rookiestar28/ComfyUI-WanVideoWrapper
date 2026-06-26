@@ -21,6 +21,7 @@ from .SCAIL.scail2_routing import (
 from .scail_pose2_mask_contract import (
     align_samples_to_latent_window,
     apply_samples_to_noise,
+    normalize_samples_payload_for_sampler,
     resize_noise_mask_for_latents,
 )
 from .enhance_a_video.globals import set_enhance_weight, set_num_frames
@@ -93,13 +94,12 @@ class WanVideoSampler:
         experimental_args=None, sigmas=None, unianimate_poses=None, fantasytalking_embeds=None, uni3c_embeds=None, multitalk_embeds=None, freeinit_args=None, start_step=0, end_step=-1, add_noise_to_samples=False):
         if flowedit_args is not None:
             raise Exception("FlowEdit support has been deprecated and removed due to lack of use and code maintainability")
-        if isinstance(samples, dict) and samples.get("scail_pose2_samples_disabled", False):
+        samples, disabled_samples_context = normalize_samples_payload_for_sampler(samples)
+        if disabled_samples_context is not None:
             log.info(
                 "WanVideoSampler: ignoring disabled SCAIL-Pose2 samples path "
-                f"condition_mode={samples.get('scail_pose2_condition_mode', 'unknown')} "
-                f"reason={samples.get('scail_pose2_disable_reason', 'unspecified')}"
+                f"{disabled_samples_context.to_log_fragment()}"
             )
-            samples = None
         patcher = model
         model = model.model
         transformer = model.diffusion_model

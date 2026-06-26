@@ -41,8 +41,9 @@ class WanVideoEncodeSocketNameTests(unittest.TestCase):
     def test_sampler_ignores_disabled_scail_pose2_samples_payload(self) -> None:
         source = (ROOT / "nodes_sampler.py").read_text(encoding="utf-8")
 
-        self.assertIn('samples.get("scail_pose2_samples_disabled", False)', source)
-        self.assertIn("samples = None", source)
+        self.assertIn("normalize_samples_payload_for_sampler", source)
+        self.assertNotIn('samples.get("scail_pose2_samples_disabled", False)', source)
+        self.assertIn("disabled_samples_context.to_log_fragment()", source)
 
     def test_sampler_uses_scail_pose2_noise_mask_contract_helper(self) -> None:
         source = (ROOT / "nodes_sampler.py").read_text(encoding="utf-8")

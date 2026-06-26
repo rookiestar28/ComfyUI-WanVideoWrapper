@@ -11,6 +11,7 @@ from scail_pose2_mask_contract import (
     SCAIL_POSE2_REPLACEMENT_DENOISE_MASK_ROLE,
     build_disabled_samples_payload,
     is_scail_pose2_replacement_noise_mask,
+    normalize_samples_payload_for_sampler,
     resize_noise_mask_for_latents,
     samples_payload_is_disabled,
     scail_pose2_mask_disables_samples,
@@ -52,6 +53,30 @@ class ScailPose2SamplesDisableContractTests(unittest.TestCase):
         self.assertFalse(scail_pose2_mask_disables_samples(generic_mask))
         self.assertFalse(samples_payload_is_disabled({"samples": object()}))
         self.assertFalse(samples_payload_is_disabled(None))
+
+    def test_sampler_normalizer_ignores_disabled_payload_with_log_context(self) -> None:
+        mask = _DummyMask()
+        setattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_ATTR, True)
+        setattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR, "non_replacement_mode")
+        setattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "animation")
+        payload = build_disabled_samples_payload(mask)
+
+        normalized, context = normalize_samples_payload_for_sampler(payload)
+
+        self.assertIsNone(normalized)
+        self.assertIsNotNone(context)
+        self.assertEqual("animation", context.condition_mode)
+        self.assertEqual("non_replacement_mode", context.reason)
+        self.assertIn("condition_mode=animation", context.to_log_fragment())
+        self.assertIn("reason=non_replacement_mode", context.to_log_fragment())
+
+    def test_sampler_normalizer_preserves_normal_payload(self) -> None:
+        payload = {"samples": object(), "noise_mask": object()}
+
+        normalized, context = normalize_samples_payload_for_sampler(payload)
+
+        self.assertIs(normalized, payload)
+        self.assertIsNone(context)
 
 
 @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable")
