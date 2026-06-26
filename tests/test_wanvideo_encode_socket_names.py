@@ -27,9 +27,16 @@ class WanVideoEncodeSocketNameTests(unittest.TestCase):
         class_source = source[start:end]
 
         self.assertIn("scail_pose2_mask_disables_samples(mask)", class_source)
-        self.assertIn('"samples": None', class_source)
-        self.assertIn('"noise_mask": None', class_source)
-        self.assertIn('"scail_pose2_samples_disabled": True', class_source)
+        self.assertIn("build_disabled_samples_payload(mask)", class_source)
+
+    def test_scail_pose2_samples_disable_contract_is_centralized(self) -> None:
+        source = (ROOT / "nodes.py").read_text(encoding="utf-8")
+        prefix = source[: source.index("class WanVideoEnhanceAVideo:")]
+
+        self.assertIn("build_disabled_samples_payload", prefix)
+        self.assertIn("scail_pose2_mask_disables_samples", prefix)
+        self.assertNotIn("SCAIL_POSE2_DISABLE_SAMPLES_ATTR =", prefix)
+        self.assertNotIn("def scail_pose2_mask_disables_samples", prefix)
 
     def test_sampler_ignores_disabled_scail_pose2_samples_payload(self) -> None:
         source = (ROOT / "nodes_sampler.py").read_text(encoding="utf-8")

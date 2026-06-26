@@ -11,6 +11,10 @@ from comfy import model_management as mm
 from comfy.utils import ProgressBar, common_upscale
 from comfy.clip_vision import clip_preprocess, ClipVisionModel
 import folder_paths
+from .scail_pose2_mask_contract import (
+    build_disabled_samples_payload,
+    scail_pose2_mask_disables_samples,
+)
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,15 +23,6 @@ offload_device = mm.unet_offload_device()
 
 VAE_STRIDE = (4, 8, 8)
 PATCH_SIZE = (1, 2, 2)
-SCAIL_POSE2_DISABLE_SAMPLES_ATTR = "scail_pose2_disable_samples"
-SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR = "scail_pose2_disable_samples_reason"
-SCAIL_POSE2_CONDITION_MODE_ATTR = "scail_pose2_condition_mode"
-
-
-def scail_pose2_mask_disables_samples(mask):
-    return bool(getattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_ATTR, False))
-
-
 class WanVideoEnhanceAVideo:
     @classmethod
     def INPUT_TYPES(s):
@@ -2264,19 +2259,13 @@ class WanVideoEncode:
 
     def encode(self, vae, driving_video, enable_vae_tiling, tile_x, tile_y, tile_stride_x, tile_stride_y, noise_aug_strength=0.0, latent_strength=1.0, mask=None):
         if scail_pose2_mask_disables_samples(mask):
-            reason = getattr(mask, SCAIL_POSE2_DISABLE_SAMPLES_REASON_ATTR, "unspecified")
-            condition_mode = getattr(mask, SCAIL_POSE2_CONDITION_MODE_ATTR, "unknown")
+            payload = build_disabled_samples_payload(mask)
             log.info(
                 "WanVideoEncode: SCAIL-Pose2 disabled samples path "
-                f"condition_mode={condition_mode} reason={reason}"
+                f"condition_mode={payload['scail_pose2_condition_mode']} "
+                f"reason={payload['scail_pose2_disable_reason']}"
             )
-            return ({
-                "samples": None,
-                "noise_mask": None,
-                "scail_pose2_samples_disabled": True,
-                "scail_pose2_disable_reason": reason,
-                "scail_pose2_condition_mode": condition_mode,
-            },)
+            return (payload,)
 
         vae.to(device)
 
